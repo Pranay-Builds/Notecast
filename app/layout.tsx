@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
+import { SessionProvider } from "next-auth/react";
 
 
 const inter = Inter({
@@ -19,11 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning={true}>
       <body
         className={`${inter.variable} antialiased`}
       >
-        {children}
+        <SessionProvider>
+           {children}
+        </SessionProvider>
+        <Toaster />
       </body>
     </html>
   );

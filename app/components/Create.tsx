@@ -1,10 +1,18 @@
 "use client";
+import { getGreeting } from "@/app/utils/getGreeting";
 import { X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
-const Home = () => {
+const Create = () => {
+  const { data: session } = useSession();
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [url, setUrl] = useState("");
+  const [videoData, setVideoData] = useState<any[]>([]);
+  const greeting = getGreeting();
   type UploadFile = {
     id: string;
     file: File;
@@ -29,7 +37,7 @@ const Home = () => {
       return;
     }
 
-    if (files.length + validFiles.length > 20) {
+    if (validFiles.length + files.length > 20) {
       toast.error("Maximum 20 files allowed total.");
       return;
     }
@@ -50,6 +58,48 @@ const Home = () => {
     setFiles((prev) => [...prev, ...newFiles]);
   };
 
+
+  const addVideo = async () => {
+    if (!url) return;
+
+
+    if (videoData.length >= 3) {
+      toast.error("Maximum 3 videos allowed.");
+      return;
+    }
+
+
+    if (videoData.some((v: any) => v.url === url)) {
+      toast.error("Video already added.");
+      return;
+    }
+
+    try {
+      setError(null);
+
+      const response = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+      );
+
+      if (!response.ok) {
+        toast.error("Invalid YouTube URL.");
+        throw new Error("Invalid YouTube URL");
+      }
+
+      const data = await response.json();
+
+
+      setVideoData((prev: any) => [...prev, { ...data, url }]);
+      setUrl("");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const removeVideo = (index: number) => {
+    setVideoData((prev: any[]) => prev.filter((_, i) => i !== index));
+  };
+
   const removeImage = (indexToRemove: number) => {
     setFiles((prev) => {
       const updated = [...prev];
@@ -64,13 +114,52 @@ const Home = () => {
     });
   };
 
+
+  const createPodcast = async () => {
+    if (files.length === 0 && videoData.length === 0) {
+      toast.error("Please add at least one file or video.");
+      return;
+    }
+
+    const formData = new FormData();
+
+    files.forEach((f) => formData.append("files", f.file));
+    formData.append("videos", JSON.stringify(videoData));
+
+
+    try {
+      const res = await fetch("/api/create-podcast", {
+        method: "POST",
+        body: formData,
+      });
+
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create podcast.");
+        throw new Error(data.error || "Failed to create podcast");
+      };
+
+      toast.success("Podcast created successfully!");
+    } catch (error) {
+      console.error("Error creating podcast:", error);
+      toast.error("Failed to create podcast.");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+    };
+  }, [files]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#121016] via-[#101010] to-[#101010] flex flex-col gap-8 justify-center items-center px-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#121016] via-[#101010] to-[#101010] flex flex-col gap-8 justify-center items-center px-8">
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-white">Notecast</h1>
         <p className="text-gray-400 mt-3 max-w-md">
           Turn your notes, lectures, and PDFs into AI-generated podcast
-          conversations.
+          conversations & chat with your notes
         </p>
       </div>
 
@@ -97,10 +186,9 @@ const Home = () => {
           flex flex-col items-center justify-center
           transition-all duration-200
           cursor-pointer
-          ${
-            isDragging
-              ? "border-violet-400 bg-[#1a1622] ring-4 ring-violet-500/10 scale-[1.01]"
-              : "border-[#2a2a2a] bg-[#161616]"
+          ${isDragging
+            ? "border-violet-400 bg-[#1a1622] ring-4 ring-violet-500/10 scale-[1.01]"
+            : "border-[#2a2a2a] bg-[#161616]"
           }
         `}
       >
@@ -162,7 +250,7 @@ const Home = () => {
       )}
 
       {/* YouTube Input */}
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md flex flex-row items-center gap-3">
         <input
           type="text"
           placeholder="Paste YouTube video link..."
@@ -180,24 +268,49 @@ const Home = () => {
             focus:ring-white/10
             transition-all
           "
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              addVideo();
+            }
+          }}
         />
+        <button
+          onClick={addVideo}
+          className="bg-white text-black px-4 py-2 rounded-xl hover:bg-gray-200 transition"
+        >
+          Add
+        </button>
       </div>
 
-      {/* Button */}
-      <button
-        className="
-        bg-white text-black
-        px-6 py-2
-        rounded-full
-        text-sm font-medium
-        hover:bg-gray-200
-        transition-colors
-      "
-      >
-        Create Podcast +
-      </button>
+
+      <div className="w-full max-w-md flex flex-col gap-3 mt-3">
+        {videoData.map((video, idx) => (
+          <div
+            key={idx}
+            className="flex gap-4 p-2 border border-gray-800 rounded-xl bg-[#1a1a1a]"
+          >
+            <img
+              src={video.thumbnail_url}
+              alt={video.title}
+              className="w-32 rounded-lg object-cover"
+            />
+            <div className="flex-1 flex flex-col justify-center">
+              <h3 className="text-white font-semibold">{video.title}</h3>
+              <p className="text-gray-400 text-sm">{video.author_name}</p>
+            </div>
+            <button
+              onClick={() => removeVideo(idx)}
+              className="text-gray-400 font-bold hover:text-white transition"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
 
-export default Home;
+export default Create;
