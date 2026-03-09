@@ -43,7 +43,27 @@ export default function Dashboard() {
     fetchNotebooks();
   }, []);
 
+  const deleteNotebook = async (id: string) => {
+    if (!id) {
+      toast.error("No Notebook ID provided");
+      return;
+    };
 
+    if (!confirm("Are you sure you want to delete this notebook?")) return;
+
+    const res = await fetch(`/api/notebook/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      toast.error("Failed to delete notebook");
+      return;
+    }
+
+    setNotebooks((prev) => prev.filter((n) => n.id !== id));
+
+    toast.success("Notebook deleted successfully!");
+  }
 
   return (
     <div className="max-w-6xl mx-auto py-12 px-6 text-white">
@@ -102,7 +122,7 @@ export default function Dashboard() {
       {!loading && notebooks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {notebooks.map((notebook) => (
-            <div className="bg-[#181818] border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative">
+            <div className="bg-[#181818] border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative" key={notebook.id}>
 
               <Link
                 href={`/notebook/${notebook.id}`}
@@ -197,7 +217,7 @@ export default function Dashboard() {
                     </div>
                   </button>
 
-                  <button className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm">
+                  <button className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm" onClick={() => deleteNotebook(notebook.id)}>
                     <div className="flex items-center gap-2">
                       <Trash size={18} />
                       Delete

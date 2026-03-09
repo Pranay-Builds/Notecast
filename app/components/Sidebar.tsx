@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, Plus, LayoutDashboard, FileText } from "lucide-react";
+import { LogOut, Plus, LayoutDashboard, FileText, UserPlus } from "lucide-react";
 import CreateNotebookModal from "./CreateNotebookModal";
 import toast from "react-hot-toast";
 import { signOut, useSession } from "next-auth/react";
@@ -42,9 +42,9 @@ export default function Sidebar() {
                         Dashboard
                     </Link>
 
-                    <Link href="/notes" className={linkStyle("/notes")}>
-                        <FileText size={16} />
-                        Notes
+                    <Link href="/characters" className={linkStyle("/characters")}>
+                        <UserPlus size={16} />
+                        Characters
                     </Link>
 
                     <button

@@ -17,6 +17,7 @@ model User {
   accounts  Account[]
   sessions  Session[]
   notebooks Notebook[]
+  characters Character[]
 }
 
 model Account {
@@ -81,4 +82,36 @@ model Source {
   notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model Message {
+  id          String @id @default(cuid())
+
+  role        String   // user | assistant | system
+  content     String
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+}
+
+model Character {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatarUrl   String?
+
+  systemPrompt String?
+
+  model       String?   // gpt-4, gemini, claude
+  temperature Float?    // creativity control
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

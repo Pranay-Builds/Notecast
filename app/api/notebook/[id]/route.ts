@@ -53,7 +53,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 { error: "Notebook not found" },
                 { status: 404 }
             );
-        }
+        };
 
         const { name, description } = await request.json();
 
@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         };
 
 
-        if (name.length > 100) {
+        if (name && name.length > 100) {
             return NextResponse.json(
                 { error: "Name cannot be more than 100 characters" },
                 { status: 400 }
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 
 
-        if (description.length > 400) {
+        if (description && description.length > 400) {
             return NextResponse.json(
                 { error: "Bio cannot be more than 400 characters" },
                 { status: 400 }
@@ -98,3 +98,45 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         );
     }
 };
+
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const { session, error } = await requireAuth();
+        if (error) {
+            return NextResponse.json({ error }, { status: 401 });
+        };
+
+
+        const { id } = await params;
+
+        const notebook = await prisma.notebook.findFirst({
+            where: {
+                id,
+                userId: session.user?.id,
+            },
+        });
+
+        if (!notebook) {
+            return NextResponse.json(
+                { error: "Notebook not found" },
+                { status: 404 }
+            );
+        };
+
+
+        await prisma.notebook.delete({
+            where: { id: id }
+        });
+
+        return NextResponse.json(
+            { message: "Notebook deleted successfully" },
+            { status: 200 }
+        );
+    } catch (error) {
+        return NextResponse.json(
+            { error: "Failed to update notebook." },
+            { status: 500 }
+        );
+    }
+}
