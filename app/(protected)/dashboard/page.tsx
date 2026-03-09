@@ -6,6 +6,7 @@ import { getGreeting } from "@/app/utils/getGreeting";
 import Link from "next/link";
 import { Plus, MoreVertical, Pencil, Share, Trash } from "lucide-react";
 import CreateNotebookModal from "@/app/components/CreateNotebookModal";
+import toast from "react-hot-toast";
 
 type Notebook = {
   id: string;
@@ -22,6 +23,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [openModal, setOpenModal] = useState(false);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     const fetchNotebooks = async () => {
@@ -39,6 +42,8 @@ export default function Dashboard() {
 
     fetchNotebooks();
   }, []);
+
+
 
   return (
     <div className="max-w-6xl mx-auto py-12 px-6 text-white">
@@ -99,8 +104,47 @@ export default function Dashboard() {
           {notebooks.map((notebook) => (
             <div className="bg-[#181818] border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative">
 
-              <Link href={`/notebook/${notebook.id}`}>
-                <h3 className="text-lg font-semibold mt-1">{notebook.name}</h3>
+              <Link
+                href={`/notebook/${notebook.id}`}
+                onClick={(e) => {
+                  if (editingId === notebook.id) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {editingId === notebook.id ? (
+                  <input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => setEditingId(null)}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+
+                        await fetch(`/api/notebook/${notebook.id}`, {
+                          method: "PATCH",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({ name: editValue }),
+                        });
+
+                        setNotebooks((prev) =>
+                          prev.map((n) =>
+                            n.id === notebook.id ? { ...n, name: editValue } : n
+                          )
+                        );
+
+                        toast.success("Notebook updated successfully!")
+
+                        setEditingId(null);
+                      }
+                    }}
+                    className="bg-transparent border border-zinc-700 rounded px-2 py-1 text-white w-full"
+                    autoFocus
+                  />
+                ) : (
+                  <h3 className="text-lg font-semibold">{notebook.name}</h3>
+                )}
 
                 {notebook.description && (
                   <p className="text-zinc-400 text-sm mt-2 line-clamp-2">
@@ -131,7 +175,15 @@ export default function Dashboard() {
               {openMenu === notebook.id && (
                 <div className="absolute right-1 top-10 bg-[#222] border border-zinc-700 rounded-lg shadow-lg w-40 py-1 z-50">
 
-                  <button className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm">
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setEditingId(notebook.id);
+                      setEditValue(notebook.name);
+                      setOpenMenu(null);
+                    }}
+                  >
                     <div className="flex items-center gap-2">
                       <Pencil size={18} />
                       Rename
