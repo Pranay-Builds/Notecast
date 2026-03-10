@@ -25,6 +25,13 @@ export default function Dashboard() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [search, setSearch] = useState("");
+
+
+  const filteredNotebooks = notebooks.filter((notebook) =>
+    notebook.name.toLowerCase().includes(search.toLowerCase()) ||
+    notebook.description?.toLowerCase().includes(search.toLowerCase())
+  );
 
   useEffect(() => {
     const fetchNotebooks = async () => {
@@ -93,6 +100,15 @@ export default function Dashboard() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <input
+          placeholder="Search notebooks..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-[#181818] border border-zinc-700 rounded-lg px-4 py-2 focus:outline-none focus:border-zinc-500"
+        />
+      </div>
+
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-20">
@@ -121,7 +137,7 @@ export default function Dashboard() {
       {/* Notebook grid */}
       {!loading && notebooks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {notebooks.map((notebook) => (
+          {filteredNotebooks.map((notebook) => (
             <div className="bg-[#181818] border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative" key={notebook.id}>
 
               <Link

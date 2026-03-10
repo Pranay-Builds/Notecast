@@ -1,15 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, User } from "lucide-react";
 import toast from "react-hot-toast";
+
+type Character = {
+    id?: string;
+    name?: string;
+    role?: string;
+    expertise?: string;
+    personality?: string;
+    speakingStyle?: string;
+    goal?: string;
+    avatarUrl?: string;
+};
 
 type Props = {
     isOpen: boolean;
     onClose: () => void;
+    mode?: "create" | "edit";
+    character?: Character | null;
+    onSaved?: () => void;
 };
 
-export default function CreateCharacterModal({ isOpen, onClose }: Props) {
+export default function CreateCharacterModal({
+    isOpen,
+    onClose,
+    mode = "create",
+    character,
+    onSaved,
+}: Props) {
 
     const [name, setName] = useState("");
     const [role, setRole] = useState("");
@@ -17,12 +37,43 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
     const [personality, setPersonality] = useState("");
     const [speakingStyle, setSpeakingStyle] = useState("");
     const [goal, setGoal] = useState("");
+
     const [avatar, setAvatar] = useState<File | null>(null);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (mode === "edit" && character) {
+            setName(character.name || "");
+            setRole(character.role || "");
+            setExpertise(character.expertise || "");
+            setPersonality(character.personality || "");
+            setSpeakingStyle(character.speakingStyle || "");
+            setGoal(character.goal || "");
+            setAvatarPreview(character.avatarUrl || null);
+        } else {
+            setName("");
+            setRole("");
+            setExpertise("");
+            setPersonality("");
+            setSpeakingStyle("");
+            setGoal("");
+            setAvatar(null);
+            setAvatarPreview(null);
+        }
+    }, [mode, character]);
 
     if (!isOpen) return null;
 
-    const handleCreate = async () => {
+    const handleAvatarChange = (file: File | null) => {
+        if (!file) return;
+
+        setAvatar(file);
+        setAvatarPreview(URL.createObjectURL(file));
+    };
+
+    const handleSubmit = async () => {
         if (!name || !role) {
             toast.error("Name and role are required");
             return;
@@ -39,13 +90,18 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
         formData.append("speakingStyle", speakingStyle);
         formData.append("goal", goal);
 
-        if (avatar) {
-            formData.append("avatar", avatar);
-        }
+        if (avatar) formData.append("avatar", avatar);
 
         try {
-            const res = await fetch("/api/character", {
-                method: "POST",
+            const endpoint =
+                mode === "create"
+                    ? "/api/character"
+                    : `/api/character/${character?.id}`;
+
+            const method = mode === "create" ? "POST" : "PATCH";
+
+            const res = await fetch(endpoint, {
+                method,
                 body: formData,
             });
 
@@ -56,13 +112,17 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
                 return;
             }
 
-            toast.success("Character created!");
+            toast.success(
+                mode === "create"
+                    ? "Character created!"
+                    : "Character updated!"
+            );
 
+            onSaved?.();
             onClose();
-            window.location.reload();
 
-        } catch (err) {
-            toast.error("Failed to create character");
+        } catch {
+            toast.error("Something went wrong");
         } finally {
             setLoading(false);
         }
@@ -73,9 +133,10 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
 
             <div className="bg-[#181818] border border-zinc-800 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
 
+                {/* Header */}
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">
-                        Create Character
+                    <h2 className="text-lg font-semibold text-white">
+                        {mode === "create" ? "Create Character" : "Edit Character"}
                     </h2>
 
                     <button onClick={onClose}>
@@ -84,6 +145,29 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
                 </div>
 
                 <div className="space-y-4">
+
+                    {/* Avatar preview */}
+                    <div className="flex justify-center">
+                        {avatarPreview ? (
+                            <img
+                                src={avatarPreview}
+                                className="w-24 h-24 rounded-full object-cover"
+                            />
+                        ) : (
+                            <div className="w-24 h-24 rounded-full bg-zinc-700 flex items-center justify-center">
+                                <User size={32} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Avatar upload */}
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                            handleAvatarChange(e.target.files?.[0] || null)
+                        }
+                    />
 
                     {/* Name */}
                     <input
@@ -111,7 +195,7 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
 
                     {/* Personality */}
                     <textarea
-                        placeholder="Personality (e.g. friendly teacher who explains things patiently)"
+                        placeholder="Personality (e.g. friendly teacher who explains patiently)"
                         className="w-full bg-[#121212] border border-zinc-700 rounded-lg px-3 py-2"
                         value={personality}
                         onChange={(e) => setPersonality(e.target.value)}
@@ -127,35 +211,22 @@ export default function CreateCharacterModal({ isOpen, onClose }: Props) {
 
                     {/* Goal */}
                     <textarea
-                        placeholder="Goal (e.g. help the user deeply understand machine learning)"
+                        placeholder="Goal (e.g. help the user deeply understand ML)"
                         className="w-full bg-[#121212] border border-zinc-700 rounded-lg px-3 py-2"
                         value={goal}
                         onChange={(e) => setGoal(e.target.value)}
                     />
 
-                    {/* Avatar */}
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setAvatar(e.target.files?.[0] || null)}
-                    />
-
-                    {/* Create button */}
+                    {/* Submit */}
                     <button
-                        onClick={handleCreate}
+                        onClick={handleSubmit}
                         className="w-full bg-white text-black py-2 rounded-lg hover:bg-gray-200 transition"
                     >
-                        {loading ? (
-                            <div className="flex justify-center">
-                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
-                            </div>
-                        ) : "Create Character"}
+                        {loading ? "Saving..." : mode === "create" ? "Create Character" : "Update Character"}
                     </button>
 
                 </div>
-
             </div>
-
         </div>
     );
 }
