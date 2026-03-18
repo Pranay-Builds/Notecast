@@ -35,7 +35,6 @@ export async function POST(req: NextRequest) {
             data: {
                 title,
                 type: "text",
-                // Store raw text content in fileUrl or add a `content` field to your schema
                 fileUrl: null,
                 content: content.trim(),
                 notebookId,
