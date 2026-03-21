@@ -1,4 +1,3 @@
-import { extractText } from "@/lib/extractors";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { uploadToCloudinary } from "@/lib/uploadToCloudinary";
@@ -45,26 +44,23 @@ export async function POST(req: NextRequest) {
 
 
         const upload = await uploadToCloudinary(file, "sources");
-        const text = await extractText({
-            type: "file",
-            file
-        });
-
-        console.log("Extracted text preview:", text.slice(0, 500));
 
 
-        const source = await prisma.source.create({
-            data: {
-                title: file.name,
-                type: "file",
-                fileUrl: upload.secure_url,
-                content: text,
-                notebookId
-            }
-        });
+        // console.log("Extracted text preview:", text.slice(0, 500));
 
 
-        return NextResponse.json({ source }, { status: 201 })
+        // const source = await prisma.source.create({
+        //     data: {
+        //         title: file.name,
+        //         type: "file",
+        //         fileUrl: upload.secure_url,
+        //         content: text,
+        //         notebookId
+        //     }
+        // });
+
+
+        // return NextResponse.json({ source }, { status: 201 })
     } catch (error) {
         return NextResponse.json(
             { error: "Either file or notebook ID not found" },
