@@ -100,15 +100,9 @@ export async function getYoutubeVideoTranscript(input: string) {
 
         const info = await yt.getInfo(videoId);
 
-        const transcriptData = await info.getTranscript();
-
-
-        const text = transcriptData.transcript;
-
-
-        if (isLowQuality(text)) {
-            throw new Error("LOW_QUALITY");
-        }
+    
+        const transcript = await info.getTranscript();
+        const text = transcript.text;
 
         return {
             text,
@@ -135,7 +129,7 @@ async function main() {
     await initYouTube();
 
     const transcript = await getYoutubeVideoTranscript(
-        "https://www.youtube.com/watch?v=W4kNu26KEHg"
+        "https://www.youtube.com/watch?v=ki0Ocze98U8"
     );
 
     console.log("Transcript:", transcript);
