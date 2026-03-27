@@ -13,13 +13,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const { id } = await params;
 
-        const notebook = await prisma.notebook.findFirst({
+        const notebook = await prisma.notebook.findUnique({
             where: {
                 id: id,
                 userId: session.user?.id,
             },
             include: {
                 sources: true,
+                character: true
             }
         });
 

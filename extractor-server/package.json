@@ -29,6 +29,7 @@
     "yt-dlp-exec": "^1.0.2"
   },
   "devDependencies": {
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0"
   }
 }

@@ -64,6 +64,11 @@ model Notebook {
   userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  characterId String?
+  character   Character? @relation(fields: [characterId], references: [id])
+
+  messages  Message[]
+
   sources Source[]
 
   createdAt DateTime @default(now())
@@ -93,7 +98,11 @@ model Message {
   characterId String
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
+  notebookId String
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+
   createdAt   DateTime @default(now())
+  @@index([notebookId, createdAt])
 }
 
 model Character {
@@ -110,6 +119,7 @@ model Character {
 
   avatarUrl     String?
   messages      Message[]
+  notebooks     Notebook[]
 
   userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
