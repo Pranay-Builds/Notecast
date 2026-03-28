@@ -26,7 +26,7 @@ export default function Sidebar() {
             {/* Top */}
             <div>
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-white text-xl font-semibold">Notecast</h1>
+                    <h1 className="text-white text-xl font-semibold">Notebuddy</h1>
 
                     <button
                         onClick={() => setOpenModal(true)}

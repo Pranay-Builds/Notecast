@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { useSession } from "next-auth/react";
 
 type Notebook = {
   id: string;
@@ -49,6 +50,8 @@ export default function NotebookPage() {
   const params = useParams();
   const id = params.id;
 
+  const { data: session } = useSession();
+
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
@@ -66,6 +69,7 @@ export default function NotebookPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchNotebook = async () => {
@@ -114,7 +118,11 @@ export default function NotebookPage() {
   const sendMessage = async () => {
     if (!message.trim() || !notebook?.character) return;
 
-    const userMsg = { role: "user", content: message };
+    const userMsg = {
+      role: "user",
+      content: message,
+      createdAt: new Date().toISOString(),
+    };
 
     // show instantly
     setMessages((prev) => [...prev, userMsg]);
@@ -141,6 +149,7 @@ export default function NotebookPage() {
       const botMsg = {
         role: "assistant",
         content: data.reply,
+        createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, botMsg]);
@@ -161,10 +170,33 @@ export default function NotebookPage() {
 
       if (!res.ok) return;
 
+      console.log(messages);
       setMessages(data.messages);
     } catch (err) {
       console.error(err);
     }
+  };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loadingMessages]);
+
+  const formatDateLabel = (date: Date) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const isToday = date.toDateString() === today.toDateString();
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    if (isToday) return "Today";
+    if (isYesterday) return "Yesterday";
+
+    return date.toLocaleDateString([], {
+      weekday: "long", // Monday
+      day: "numeric",
+      month: "short", // Jan
+    });
   };
 
   // ─── Simulated progress helper ──────────────────────────────────────────────
@@ -487,7 +519,7 @@ export default function NotebookPage() {
             {notebook?.character?.avatarUrl ? (
               <img
                 src={notebook.character.avatarUrl}
-                className="w-10 h-10 rounded-full object-cover border border-zinc-700"
+                className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square"
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
@@ -763,58 +795,119 @@ export default function NotebookPage() {
 
         {/* CHAT AREA */}
         <div className="flex flex-col flex-1">
-          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+          <div className="flex-1 p-4 overflow-y-auto">
             {messages.length === 0 && (
-              <div className="text-zinc-500 text-sm">
+              <div className="text-zinc-500 text-sm px-2">
                 Ask anything... {notebook?.character?.name} will help you.
               </div>
             )}
 
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                {/* AI Avatar */}
-                {msg.role === "assistant" && (
-                  <img
-                    src={notebook?.character?.avatarUrl || ""}
-                    className="w-8 h-8 rounded-full"
-                  />
-                )}
+            {messages.map((msg, i) => {
+              const isSameSender = messages[i - 1]?.role === msg.role;
 
-                <div
-                  className={`p-3 rounded-lg max-w-xl text-sm leading-relaxed ${
-                    msg.role === "user" ? "bg-blue-500" : "bg-zinc-800"
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
+              const currentDate = new Date(msg.createdAt);
+              const prevDate = messages[i - 1]
+                ? new Date(messages[i - 1].createdAt)
+                : null;
 
-            {/* Typing indicator */}
+              const isNewDay =
+                !prevDate ||
+                currentDate.toDateString() !== prevDate.toDateString();
+
+              return (
+                <>
+                  {isNewDay && (
+                    <div className="flex items-center justify-center my-4">
+                      <div className="bg-zinc-800 text-zinc-400 text-xs px-3 py-1 rounded-full">
+                        {formatDateLabel(currentDate)}
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    key={i}
+                    className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
+                      !isSameSender ? "mt-4" : "mt-2"
+                    }`}
+                  >
+                    {/* Avatar column — always 40px wide */}
+                    <div className="w-10 min-w-[40px] flex justify-center">
+                      {!isSameSender ? (
+                        <img
+                          src={
+                            msg.role === "assistant"
+                              ? notebook?.character?.avatarUrl || ""
+                              : session?.user?.image ||
+                                `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
+                          }
+                          className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
+                        />
+                      ) : (
+                        // Hover timestamp where avatar would be
+                        <span className="text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity leading-[40px] select-none">
+                          {new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Message body */}
+                    <div className="flex-1 min-w-0">
+                      {!isSameSender && (
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className="text-[15px] font-medium text-white leading-tight">
+                            {msg.role === "user"
+                              ? session?.user?.name || "You"
+                              : notebook?.character?.name || "AI"}
+                          </span>
+                          <span className="text-[11px] text-zinc-500">
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-sm text-[#dcddde] leading-[1.375] whitespace-pre-wrap break-words">
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              );
+            })}
+
             {loadingMessages && (
-              <div className="text-zinc-400 text-sm">
-                {notebook?.character?.name} is typing...
+              <div className="flex gap-4 px-2 py-0.5 mt-1">
+                <div className="w-10 min-w-[40px]" />
+                <p className="text-sm text-zinc-500 italic">
+                  {notebook?.character?.name} is typing...
+                </p>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
-          <div className="border-t border-zinc-800 p-4 flex gap-3">
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendMessage();
-              }}
-              placeholder="Ask something about your sources..."
-              className="flex-1 bg-[#181818] px-4 py-3 rounded-lg border border-zinc-800 focus:outline-none focus:border-zinc-600"
-            />
-            <button className="p-2 rounded-lg hover:bg-zinc-800 transition">
-              <Send size={18} />
-            </button>
+
+          {/* Input bar */}
+          <div className="px-4 pb-6 pt-2">
+            <div className="flex items-center gap-3 bg-black rounded-lg px-4">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") sendMessage();
+                }}
+                placeholder={`Message ${notebook?.character?.name || "AI"}...`}
+                className="flex-1 bg-transparent py-3 text-sm text-white placeholder-zinc-500 focus:outline-none"
+              />
+              <button
+                onClick={sendMessage}
+                className="text-zinc-400 hover:text-zinc-200 transition p-1 rounded"
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
