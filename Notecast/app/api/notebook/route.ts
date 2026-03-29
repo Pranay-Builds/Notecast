@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ notebook }, { status: 201 });
   } catch (error) {
+    console.error("Error in create notebook: ", error);
     return NextResponse.json(
       { error: "Failed to create notebook." },
       { status: 500 },

@@ -123,6 +123,8 @@ export async function GET(req: NextRequest) {
                 role: true,
                 expertise: true,
                 personality: true,
+                speakingStyle: true, // ✅
+                goal: true,          // ✅
                 avatarUrl: true,
                 createdAt: true
             }
