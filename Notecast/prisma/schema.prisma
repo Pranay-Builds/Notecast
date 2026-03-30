@@ -82,6 +82,7 @@ model Source {
   content    String?
   fileUrl    String?
   metadata   Json?
+  thumbnail  String?
 
   notebookId String
   notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)

@@ -107,9 +107,8 @@ async function downloadYouTubeAudio(videoId: string) {
   );
 
   await ytDlp(`https://www.youtube.com/watch?v=${videoId}`, {
-    extractAudio: true,
-    audioFormat: "mp3",
-    output: filePath,
+    output: filePath.replace(".mp3", ".webm"),
+    format: "bestaudio",
   });
 
   return filePath;
@@ -121,7 +120,7 @@ async function whisperFallback(videoId: string) {
   try {
     const result = await transcribe({
       type: "file",
-      path: filePath,
+      path: filePath.replace(".mp3", ".webm"),
     });
 
     return result.text;
@@ -132,7 +131,7 @@ async function whisperFallback(videoId: string) {
   }
 }
 
-export async function getYoutubeVideoTranscript(input: string) {
+export async function extractYoutubeVideoTranscript(input: string) {
   const videoId = getYouTubeVideoId(input);
 
   if (!videoId) {
@@ -140,12 +139,10 @@ export async function getYoutubeVideoTranscript(input: string) {
   }
 
   try {
-    
     const subs = await getYoutubeSubtitles(videoId);
     console.log(subs);
     return subs;
   } catch {
-
     const text = await whisperFallback(videoId);
 
     return {
@@ -154,13 +151,3 @@ export async function getYoutubeVideoTranscript(input: string) {
     };
   }
 }
-
-async function main() {
-  const transcript = await getYoutubeVideoTranscript(
-    "https://www.youtube.com/watch?v=3AtDnEC4zak",
-  );
-
-  console.log("Transcript:", transcript);
-}
-
-main();

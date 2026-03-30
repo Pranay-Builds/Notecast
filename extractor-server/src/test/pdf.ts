@@ -2,7 +2,7 @@ import "dotenv/config";
 import { extractFromPDF } from "../extractors/pdf";
 
 async function main() {
-  const url = "https://drive.google.com/uc?export=download&id=1scLZRTol0xAZkK_GUlaySUYsvCDt9WDP";
+  const url = "https://static.pw.live/5eb393ee95fab7468a79d189/GLOBAL_CMS_BLOGS/3e49aeb9-2909-430f-bb8e-893df0c1e3d8.pdf";
 
   const text = await extractFromPDF(url);
 
