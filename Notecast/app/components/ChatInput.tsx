@@ -1,18 +1,24 @@
 import { Send } from "lucide-react";
 import React from "react";
 
-const ChatInput = React.memo(function ChatInput({ onSend, placeholder }: { onSend: (message: string) => void; placeholder?: string }) {
+const ChatInput = React.memo(function ChatInput({
+  onSend,
+  placeholder,
+}: {
+  onSend: (message: string) => void;
+  placeholder?: string;
+}) {
   const [localMessage, setLocalMessage] = React.useState("");
 
   const handleSend = () => {
     if (!localMessage.trim()) return;
     onSend(localMessage);
-    setLocalMessage(""); // clear after send
+    setLocalMessage(""); 
   };
 
   return (
     <div className="px-4 pb-6 pt-2">
-      <div className="flex items-center gap-3 bg-black rounded-lg px-4">
+      <div className="flex items-center gap-3 bg-[#181818] rounded-lg border border-zinc-800 px-3 py-2 ">
         <textarea
           value={localMessage}
           onChange={(e) => setLocalMessage(e.target.value)}
@@ -24,20 +30,15 @@ const ChatInput = React.memo(function ChatInput({ onSend, placeholder }: { onSen
           }}
           placeholder={placeholder || "Message AI..."}
           className="
-            w-full
-            bg-[#181818]
-            border border-zinc-700
-            px-3 py-2
-            rounded-lg
-            text-sm text-white
-            placeholder-zinc-500
-            resize-none
-            outline-none
-            transition-all duration-200
-            focus:border-zinc-500
-            focus:ring-2 focus:ring-zinc-600/40
-            hover:border-zinc-600
-          "
+  w-full
+  bg-transparent
+  border-none
+  px-2 py-2
+  text-sm text-white
+  placeholder-zinc-500
+  resize-none
+  outline-none
+"
         />
 
         <button

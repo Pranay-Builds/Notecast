@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Ghost,
@@ -29,7 +29,6 @@ import remarkGfm from "remark-gfm";
 import CodeBlock from "@/app/components/CodeBlock";
 import ChatInput from "@/app/components/ChatInput";
 
-
 type Notebook = {
   id: string;
   name: string;
@@ -51,8 +50,6 @@ type Source = {
   type: "file" | "youtube" | "webpage" | "text" | "video" | "audio";
   title: string;
   preview?: string;
-  thumbnail?: string;
-  url?: string;
 };
 
 export default function NotebookPage() {
@@ -108,7 +105,6 @@ export default function NotebookPage() {
     try {
       const res = await fetch(`/api/notebook/${id}/sources`);
       const data = await res.json();
-      console.log(data);
 
       if (!res.ok) return;
 
@@ -221,19 +217,6 @@ export default function NotebookPage() {
       month: "short", // Jan
     });
   };
-
-  function getYouTubeId(url: string) {
-    try {
-      const u = new URL(url);
-
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      if (u.hostname === "youtu.be") return u.pathname.slice(1);
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
 
   // ─── Simulated progress helper ──────────────────────────────────────────────
   const simulateProgress = (uploadId: string) => {
@@ -404,8 +387,7 @@ export default function NotebookPage() {
           id: data.source.id,
           type: "youtube",
           title: oembed.title,
-          thumbnail: oembed.thumbnail_url,
-          url: url,
+          preview: oembed.thumbnail_url,
         },
       ]);
 
@@ -547,7 +529,6 @@ export default function NotebookPage() {
 
   return (
     <div className="flex flex-col flex-1 min-w-0">
-
       <div className="h-screen flex flex-col bg-[#121212] text-white">
         {/* HEADER */}
         <header className="bg-[#181818] border-b border-zinc-800 h-14 flex items-center justify-between px-6">
@@ -584,7 +565,6 @@ export default function NotebookPage() {
               <Share size={16} />
               Share
             </button>
-
 
             <button
               onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -627,7 +607,6 @@ export default function NotebookPage() {
                 </div>
               </div>
             )}
-
 
             {/* ADD SOURCE CARD */}
             <div className="sticky top-0 z-10 bg-[#121212] pb-2">
@@ -756,12 +735,13 @@ export default function NotebookPage() {
                     </div>
                     <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ease-out ${upload.status === "error"
-                          ? "bg-red-500"
-                          : upload.status === "done"
-                            ? "bg-emerald-500"
-                            : "bg-violet-500"
-                          }`}
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${
+                          upload.status === "error"
+                            ? "bg-red-500"
+                            : upload.status === "done"
+                              ? "bg-emerald-500"
+                              : "bg-violet-500"
+                        }`}
                         style={{ width: `${upload.progress}%` }}
                       />
                     </div>
@@ -788,58 +768,59 @@ export default function NotebookPage() {
                 </p>
               )}
 
-            {!sourcesLoading &&
-              sources.map((source, index) => (
-                <div
-                  key={source.id}
-                  className="group flex items-center justify-between bg-[#181818] border border-zinc-800 px-3 py-2 rounded-lg hover:bg-zinc-800 transition"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {source.preview && source.type === "file" ? (
-                      <img
-                        src={source.preview}
-                        className="w-10 h-10 rounded object-cover shrink-0"
-                        alt={source.title}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="shrink-0">
-                        {source.type === "file" && (
-                          <FileText size={16} className="text-zinc-400" />
-                        )}
-                        {source.type === "youtube" && (
-                          <Youtube size={16} className="text-red-400" />
-                        )}
-                        {source.type === "webpage" && (
-                          <Globe size={16} className="text-blue-400" />
-                        )}
-                        {source.type === "text" && (
-                          <Clipboard size={16} className="text-yellow-400" />
-                        )}
-                        {source.type === "video" && (
-                          <Video size={16} className="text-purple-400" />
-                        )}
-                        {source.type === "audio" && (
-                          <Music size={16} className="text-green-400" />
-                        )}
-                      </div>
-                    )}
-                    <span className="text-sm truncate max-w-[180px]">
-                      {source.title}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => deleteSource(source.id, index)}
-                    className="opacity-0 group-hover:opacity-100 transition shrink-0 ml-2 hover:text-red-400"
+              {!sourcesLoading &&
+                sources.map((source, index) => (
+                  <div
+                    key={source.id}
+                    className="group flex items-center justify-between bg-[#181818] border border-zinc-800 px-3 py-2 rounded-lg hover:bg-zinc-800 transition"
                   >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2 truncate">
+                      {source.preview && source.type === "file" ? (
+                        <img
+                          src={source.preview}
+                          className="w-10 h-10 rounded object-cover shrink-0"
+                          alt={source.title}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display =
+                              "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="shrink-0">
+                          {source.type === "file" && (
+                            <FileText size={16} className="text-zinc-400" />
+                          )}
+                          {source.type === "youtube" && (
+                            <Youtube size={16} className="text-red-400" />
+                          )}
+                          {source.type === "webpage" && (
+                            <Globe size={16} className="text-blue-400" />
+                          )}
+                          {source.type === "text" && (
+                            <Clipboard size={16} className="text-yellow-400" />
+                          )}
+                          {source.type === "video" && (
+                            <Video size={16} className="text-purple-400" />
+                          )}
+                          {source.type === "audio" && (
+                            <Music size={16} className="text-green-400" />
+                          )}
+                        </div>
+                      )}
+                      <span className="text-sm truncate max-w-[180px]">
+                        {source.title}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => deleteSource(source.id, index)}
+                      className="opacity-0 group-hover:opacity-100 transition shrink-0 ml-2 hover:text-red-400"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
 
           {/* CHAT AREA */}
           <div className="flex flex-col flex-1">
@@ -862,30 +843,30 @@ export default function NotebookPage() {
                   !prevDate ||
                   currentDate.toDateString() !== prevDate.toDateString();
 
-              return (
-                <>
-                  {isNewDay && (
-                    <div className="flex items-center justify-center my-4">
-                      <div className="bg-zinc-800 text-zinc-400 text-xs px-3 py-1 rounded-full">
-                        {formatDateLabel(currentDate)}
+                return (
+                  <React.Fragment key={msg.createdAt}>
+                    {isNewDay && (
+                      <div className="flex items-center justify-center my-4">
+                        <div className="bg-zinc-800 text-zinc-400 text-xs px-3 py-1 rounded-full">
+                          {formatDateLabel(currentDate)}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div
-                    key={i}
-                    className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
-                      !isSameSender ? "mt-4" : "mt-2"
-                    }`}
-                  >
-                    {/* Avatar column — always 40px wide */}
-                    <div className="w-10 min-w-[40px] flex justify-center">
-                      {!isSameSender ? (
-                        <img
-                          src={
-                            msg.role === "assistant"
-                              ? notebook?.character?.avatarUrl || ""
-                              : session?.user?.image ||
-                                `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
+                    )}
+                    <div
+                      key={i}
+                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
+                        !isSameSender ? "mt-4" : "mt-2"
+                      }`}
+                    >
+                      {/* Avatar column — always 40px wide */}
+                      <div className="w-10 min-w-[40px] flex justify-center">
+                        {!isSameSender ? (
+                          <img
+                            src={
+                              msg.role === "assistant"
+                                ? notebook?.character?.avatarUrl || ""
+                                : session?.user?.image ||
+                                  `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
                             }
                             className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
                           />
@@ -900,31 +881,109 @@ export default function NotebookPage() {
                         )}
                       </div>
 
-                    {/* Message body */}
-                    <div className="flex-1 min-w-0">
-                      {!isSameSender && (
-                        <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className="text-[15px] font-medium text-white leading-tight">
-                            {msg.role === "user"
-                              ? session?.user?.name || "You"
-                              : notebook?.character?.name || "AI"}
-                          </span>
-                          <span className="text-[11px] text-zinc-500">
-                            {new Date(msg.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+                      {/* Message body */}
+                      <div className="flex-1 min-w-0 relative">
+                        {!isSameSender && (
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className="text-[15px] font-medium text-white leading-tight">
+                              {msg.role === "user"
+                                ? session?.user?.name || "You"
+                                : notebook?.character?.name || "AI"}
+                            </span>
+                            <span className="text-[11px] text-zinc-500">
+                              {new Date(msg.createdAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-sm leading-[1.5]">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              p: ({ children }) => (
+                                <p className="mb-2 text-[#dcddde] leading-relaxed">
+                                  {children}
+                                </p>
+                              ),
+
+                              ul: ({ children }) => (
+                                <ul className="list-disc ml-5 mb-2 space-y-1 text-[#dcddde]">
+                                  {children}
+                                </ul>
+                              ),
+
+                              ol: ({ children }) => (
+                                <ol className="list-decimal ml-5 mb-2 space-y-1 text-[#dcddde]">
+                                  {children}
+                                </ol>
+                              ),
+
+                              li: ({ children }) => (
+                                <li className="leading-relaxed">{children}</li>
+                              ),
+
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-white">
+                                  {children}
+                                </strong>
+                              ),
+
+                              code: ({ className, children }) => {
+                                const match = /language-(\w+)/.exec(
+                                  className || "",
+                                );
+                                const lang = match ? match[1] : "code";
+
+                                return (
+                                  <CodeBlock
+                                    code={String(children).replace(/\n$/, "")}
+                                    lang={lang}
+                                  />
+                                );
+                              },
+
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-2 border-zinc-600 pl-3 text-zinc-400 italic mb-2">
+                                  {children}
+                                </blockquote>
+                              ),
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
                         </div>
-                      )}
-                      <p className="text-sm text-[#dcddde] leading-[1.375] whitespace-pre-wrap break-words">
-                        {msg.content}
-                      </p>
+
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.content);
+                            setCopiedId(msg.createdAt);
+
+                            setTimeout(() => {
+                              setCopiedId(null);
+                            }, 2000);
+                          }}
+                          className="
+    absolute bottom-1 right-1 z-10
+    opacity-0 group-hover:opacity-100
+    transition-all duration-150
+    text-zinc-400 hover:text-white
+    bg-zinc-800/80 backdrop-blur
+    p-1.5 rounded-md
+  "
+                        >
+                          {copiedId === msg.createdAt ? (
+                            <Check size={14} />
+                          ) : (
+                            <Copy size={14} />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </>
-              );
-            })}
+                  </React.Fragment>
+                );
+              })}
 
               {loadingMessages && (
                 <div className="flex gap-4 px-2 py-0.5 mt-1">
@@ -937,8 +996,10 @@ export default function NotebookPage() {
               <div ref={bottomRef} />
             </div>
 
-
-            <ChatInput onSend={sendMessage} placeholder={`Message ${notebook.character.name}`} />
+            <ChatInput
+              onSend={sendMessage}
+              placeholder={`Message ${notebook.character.name}`}
+            />
           </div>
         </div>
       </div>
