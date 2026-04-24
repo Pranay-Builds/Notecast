@@ -70,7 +70,7 @@ export default function Characters() {
 
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-semibold">Characters</h1>
+                <h1 className="text-3xl font-semibold">Study Buddies</h1>
 
                 <button
                     onClick={() => {
@@ -80,13 +80,13 @@ export default function Characters() {
                     className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition"
                 >
                     <Plus size={16} />
-                    Create Character
+                    Create Study Buddy
                 </button>
             </div>
 
             <div className="mb-6">
                 <input
-                    placeholder="Search characters..."
+                    placeholder="Search study buddies..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full bg-[#181818] border border-zinc-700 rounded-lg px-4 py-2 focus:outline-none focus:border-zinc-500"

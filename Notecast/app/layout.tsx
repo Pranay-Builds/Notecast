@@ -11,7 +11,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Notecast",
+  title: "Studybuddy",
   description: "Turn your notes into podcasts within minutes.",
 };
 

@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { runOCR } from "../lib/ocr";
 import { createConverter, pdfPageToImage } from "../utils/pdfToPic";
 import { cleanOCR } from "../utils/cleanOCR";
+import { createHash } from "crypto";
 
 // 🔥 queue
 const globalQueue = new PQueue({ concurrency: 3 });
@@ -69,8 +70,10 @@ function cleanText(text: string) {
 }
 
 export async function extractFromPDF(url: string) {
-  // cache
-  if (pdfCache.has(url)) return pdfCache.get(url)!;
+  const hash = createHash("sha256").update(url).digest("hex");
+  if (pdfCache.has(hash)) {
+    return pdfCache.get(hash)!;
+  }
 
   const { data, headers } = await axios.get(url, {
     responseType: "arraybuffer",
@@ -104,8 +107,8 @@ export async function extractFromPDF(url: string) {
 
     const converter = createConverter(pdfBuffer);
 
-    const MAX_OCR_PAGES = 10;
-    const pagesToProcess = Math.min(pages || 10, MAX_OCR_PAGES);
+    const MAX_OCR_PAGES = 15;
+    const pagesToProcess = Math.min(pages || 15, MAX_OCR_PAGES);
 
     const results: string[] = [];
 
@@ -132,8 +135,8 @@ export async function extractFromPDF(url: string) {
           console.log("OCR page failed:", i);
           return "";
         } finally {
-          if (imagePath) await fs.unlink(imagePath).catch(() => {});
-          if (processedPath) await fs.unlink(processedPath).catch(() => {});
+          if (imagePath) await fs.unlink(imagePath).catch(() => { });
+          if (processedPath) await fs.unlink(processedPath).catch(() => { });
         }
       });
 
@@ -142,7 +145,7 @@ export async function extractFromPDF(url: string) {
 
     const ocrText = results.join("\n\n");
 
-    // 🔥 pick better result
+    // if OCR text is significantly longer than parsed text, use it instead
     if (ocrText.length > text.length * 1.2) {
       finalText = ocrText;
     }
@@ -150,9 +153,10 @@ export async function extractFromPDF(url: string) {
 
   const cleaned = cleanText(finalText);
 
-  // cache limit
+  
   if (pdfCache.size > 50) pdfCache.clear();
-  pdfCache.set(url, cleaned);
+  pdfCache.set(hash, cleaned);
+
 
   return cleaned;
 }

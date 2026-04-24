@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
           type: "youtube",
           fileUrl: url,
           content: cached.content,
-          thumbnail: cached.thumbnail,
+          thumbnail: thumbnail,
           notebookId,
         },
       });
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
     const res = await fetch("http://localhost:4000/extract", {
       method: "POST",

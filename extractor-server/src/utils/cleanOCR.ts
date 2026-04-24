@@ -7,13 +7,28 @@ const groq = new Groq({
 });
 
 export async function cleanOCR(text: string) {
-    console.log('[CLEAN OCR] RUNNING')
+  console.log('[CLEAN OCR] RUNNING')
   const response = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
     messages: [
       {
         role: "system",
-        content: "Fix OCR errors. Return clean corrected text. Do not add extra explanation."
+        content: `
+You are correcting OCR output from handwritten school notes.
+
+Rules:
+- Aggressively fix spelling mistakes
+- Assume this is academic text (math syllabus)
+- Convert broken words into real English words
+- Fix spacing and grammar
+- Use common sense (e.g. "Numbee" → "Numbers")
+- If text looks like chapter names, normalize them
+
+Return ONLY corrected text.
+
+Text:
+${text}
+`
       },
       {
         role: "user",

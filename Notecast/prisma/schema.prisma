@@ -118,6 +118,13 @@ model Character {
   speakingStyle String?
   goal          String?
 
+  enrichedExpertise     String?
+  enrichedPersonality   String?
+  enrichedSpeakingStyle String?
+  enrichedGoal          String?
+
+  lastEnrichedAt        DateTime?
+
   avatarUrl     String?
   messages      Message[]
   notebooks     Notebook[]

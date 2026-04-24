@@ -20,6 +20,7 @@ import {
   Music,
   Copy,
   Check,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -50,6 +51,9 @@ type Source = {
   type: "file" | "youtube" | "webpage" | "text" | "video" | "audio";
   title: string;
   preview?: string;
+
+  content?: string;
+  metadata?: any;
 };
 
 export default function NotebookPage() {
@@ -114,6 +118,9 @@ export default function NotebookPage() {
           type: s.type,
           title: s.title,
           preview: s.fileUrl,
+
+          content: s.content,       
+          metadata: s.metadata,  
         })),
       );
     } catch (error) {
@@ -144,7 +151,7 @@ export default function NotebookPage() {
         body: JSON.stringify({
           message: msg, // ✅ USE msg, not state
           character: notebook.character,
-          history: messages.slice(-10), // 🔥 IMPORTANT
+          history: messages.slice(-10),
           sources: sources,
           notebookId: notebook.id,
         }),
@@ -402,50 +409,7 @@ export default function NotebookPage() {
     }
   };
 
-  // ─── Webpage ─────────────────────────────────────────────────────────────────
-  const addWebpage = async () => {
-    if (!webUrl.trim()) return;
-    setIsAddingWebpage(true);
 
-    const uploadId = crypto.randomUUID();
-    setUploads((prev) => [
-      ...prev,
-      { id: uploadId, name: webUrl, progress: 0, status: "uploading" },
-    ]);
-    const interval = simulateProgress(uploadId);
-
-    try {
-      const res = await fetch("/api/source/webpage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: webUrl, notebookId: id }),
-      });
-
-      if (!res.ok) throw new Error("Failed to save webpage");
-      const data = await res.json();
-
-      clearInterval(interval);
-      finalizeUpload(uploadId, "done");
-
-      setSources((prev) => [
-        ...prev,
-        {
-          id: data.source.id,
-          type: "webpage",
-          title: data.source.title || webUrl,
-        },
-      ]);
-
-      setWebUrl("");
-      toast.success("Webpage added");
-    } catch (err: any) {
-      clearInterval(interval);
-      finalizeUpload(uploadId, "error");
-      toast.error(err.message || "Failed to add webpage");
-    } finally {
-      setIsAddingWebpage(false);
-    }
-  };
 
   // ─── Text / Notes ─────────────────────────────────────────────────────────────
   const addText = async () => {
@@ -543,7 +507,7 @@ export default function NotebookPage() {
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
-                  👤
+                  <User size={18} />
                 </div>
               )}
 
@@ -655,28 +619,7 @@ export default function NotebookPage() {
                   </button>
                 </div>
 
-                {/* WEBPAGE */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add webpage URL..."
-                    value={webUrl}
-                    onChange={(e) => setWebUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addWebpage()}
-                    className="flex-1 bg-[#121212] border border-zinc-700 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-zinc-500"
-                  />
-                  <button
-                    onClick={addWebpage}
-                    disabled={isAddingWebpage || !webUrl.trim()}
-                    className="bg-zinc-700 px-3 rounded-lg hover:bg-zinc-600 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[48px] flex items-center justify-center"
-                  >
-                    {isAddingWebpage ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <Globe size={16} />
-                    )}
-                  </button>
-                </div>
+
 
                 {/* PASTE TEXT */}
                 <textarea
@@ -735,13 +678,12 @@ export default function NotebookPage() {
                     </div>
                     <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ease-out ${
-                          upload.status === "error"
-                            ? "bg-red-500"
-                            : upload.status === "done"
-                              ? "bg-emerald-500"
-                              : "bg-violet-500"
-                        }`}
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${upload.status === "error"
+                          ? "bg-red-500"
+                          : upload.status === "done"
+                            ? "bg-emerald-500"
+                            : "bg-violet-500"
+                          }`}
                         style={{ width: `${upload.progress}%` }}
                       />
                     </div>
@@ -854,24 +796,33 @@ export default function NotebookPage() {
                     )}
                     <div
                       key={i}
-                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
-                        !isSameSender ? "mt-4" : "mt-2"
-                      }`}
+                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${!isSameSender ? "mt-4" : "mt-2"
+                        }`}
                     >
                       {/* Avatar column — always 40px wide */}
                       <div className="w-10 min-w-[40px] flex justify-center">
                         {!isSameSender ? (
-                          <img
-                            src={
-                              msg.role === "assistant"
-                                ? notebook?.character?.avatarUrl || ""
-                                : session?.user?.image ||
-                                  `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
-                            }
-                            className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
-                          />
+                          msg.role === "assistant" ? (
+                            notebook?.character?.avatarUrl ? (
+                              <img
+                                src={notebook.character.avatarUrl}
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
+                                <User size={18} />
+                              </div>
+                            )
+                          ) : (
+                            <img
+                              src={
+                                session?.user?.image ||
+                                `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
+                              }
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          )
                         ) : (
-                          // Hover timestamp where avatar would be
                           <span className="text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity leading-[40px] select-none">
                             {new Date(msg.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",

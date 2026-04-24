@@ -3,7 +3,62 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { uploadToCloudinary } from "@/lib/uploadToCloudinary";
 import { buildCharacterPrompt } from "@/lib/buildCharacterPrompt";
+import Groq from "groq-sdk";
 
+const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+});
+
+// ------------------ QUALITY CHECK ------------------
+function shouldEnrich({
+    name,
+    role,
+    expertise,
+    personality,
+    speakingStyle,
+    goal,
+}: any) {
+    let score = 0;
+
+    if (expertise && expertise.length > 20) score++;
+    if (personality && personality.length > 30) score++;
+    if (speakingStyle && speakingStyle.length > 30) score++;
+    if (goal && goal.length > 20) score++;
+
+    const isTooShortName = name.length < 4;
+    const isGenericRole = role.length < 10;
+
+    return score < 3 || isTooShortName || isGenericRole;
+}
+
+// ------------------ ENRICHMENT ------------------
+async function enrichCharacter(prompt: string) {
+    try {
+        const completion = await groq.chat.completions.create({
+            model: "llama-3.1-8b-instant", 
+            temperature: 0.4,
+            max_tokens: 300,
+            messages: [
+                {
+                    role: "user",
+                    content: prompt,
+                },
+            ],
+        });
+
+        const text = completion.choices[0]?.message?.content || "";
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return null;
+
+        return JSON.parse(jsonMatch[0]);
+    } catch (err) {
+        console.error("Enrichment failed:", err);
+        return null;
+    }
+}
+
+// ------------------ ROUTE ------------------
 export async function POST(req: NextRequest) {
     try {
         const { session, error } = await requireAuth();
@@ -13,7 +68,6 @@ export async function POST(req: NextRequest) {
         }
 
         const userId = session.user?.id;
-
         if (!userId) {
             return NextResponse.json(
                 { error: "User not authenticated" },
@@ -38,10 +92,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // ------------------ AVATAR ------------------
         let avatarUrl: string | null = null;
 
         if (avatar && avatar.size > 0) {
-
             if (avatar.size > 5 * 1024 * 1024) {
                 return NextResponse.json(
                     { error: "Avatar must be under 5MB" },
@@ -50,7 +104,6 @@ export async function POST(req: NextRequest) {
             }
 
             const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-
             if (!allowedTypes.includes(avatar.type)) {
                 return NextResponse.json(
                     { error: "Invalid avatar format" },
@@ -62,39 +115,99 @@ export async function POST(req: NextRequest) {
             avatarUrl = upload.secure_url;
         }
 
-        const systemPrompt = buildCharacterPrompt({
-            name,
-            role,
-            userName: session.user?.name || "User",
-            expertise,
-            personality,
-            speakingStyle,
-            goal
-        });
+        // ------------------ ENRICHMENT PROMPT ------------------
+        const enrichmentPrompt = `
+You are a senior AI character architect.
 
-        const character = await prisma.character.create({
-            data: {
+Convert weak input into a sharp AI persona.
+
+INPUT:
+Name: ${name}
+Role: ${role}
+Expertise: ${expertise || "MISSING"}
+Personality: ${personality || "MISSING"}
+Speaking Style: ${speakingStyle || "MISSING"}
+Goal: ${goal || "MISSING"}
+
+OUTPUT JSON ONLY:
+{
+  "expertise": "...",
+  "personality": "...",
+  "speakingStyle": "...",
+  "goal": "..."
+}
+`;
+
+        // ------------------ ENRICHMENT FLOW ------------------
+        let enrichedData: any = null;
+
+        if (
+            shouldEnrich({
                 name,
                 role,
                 expertise,
                 personality,
                 speakingStyle,
                 goal,
+            })
+        ) {
+            enrichedData = await enrichCharacter(enrichmentPrompt);
+        }
+
+        // ------------------ FINAL VALUES ------------------
+        const finalExpertise = enrichedData?.expertise || expertise;
+        const finalPersonality = enrichedData?.personality || personality;
+        const finalSpeakingStyle =
+            enrichedData?.speakingStyle || speakingStyle;
+        const finalGoal = enrichedData?.goal || goal;
+
+        // ------------------ SYSTEM PROMPT ------------------
+        const systemPrompt = buildCharacterPrompt({
+            name,
+            role,
+            userName: session.user?.name || "User",
+            expertise: finalExpertise,
+            personality: finalPersonality,
+            speakingStyle: finalSpeakingStyle,
+            goal: finalGoal,
+        });
+
+        // ------------------ SAVE ------------------
+        const character = await prisma.character.create({
+            data: {
+                name,
+                role,
+
+          
+                expertise,
+                personality,
+                speakingStyle,
+                goal,
+
+                
+                enrichedExpertise: enrichedData?.expertise || null,
+                enrichedPersonality: enrichedData?.personality || null,
+                enrichedSpeakingStyle:
+                    enrichedData?.speakingStyle || null,
+                enrichedGoal: enrichedData?.goal || null,
+
                 systemPrompt,
                 avatarUrl,
                 userId,
+
+                lastEnrichedAt: enrichedData ? new Date() : null,
             },
         });
 
         return NextResponse.json({ character }, { status: 201 });
-
     } catch (err) {
+        console.error(err);
         return NextResponse.json(
             { error: "Failed to create character" },
             { status: 500 }
         );
     }
-};
+}
 
 
 export async function GET(req: NextRequest) {
@@ -123,8 +236,8 @@ export async function GET(req: NextRequest) {
                 role: true,
                 expertise: true,
                 personality: true,
-                speakingStyle: true, // ✅
-                goal: true,          // ✅
+                speakingStyle: true,
+                goal: true,
                 avatarUrl: true,
                 createdAt: true
             }

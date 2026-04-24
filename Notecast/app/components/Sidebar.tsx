@@ -26,7 +26,7 @@ export default function Sidebar() {
             {/* Top */}
             <div>
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-white text-xl font-semibold">Notebuddy</h1>
+                    <h1 className="text-white text-xl font-semibold">studybuddy</h1>
 
                     <button
                         onClick={() => setOpenModal(true)}
@@ -44,7 +44,7 @@ export default function Sidebar() {
 
                     <Link href="/characters" className={linkStyle("/characters")}>
                         <UserPlus size={16} />
-                        Characters
+                        Study Buddies
                     </Link>
 
                     <button

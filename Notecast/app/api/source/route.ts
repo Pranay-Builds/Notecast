@@ -12,6 +12,9 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
@@ -35,37 +38,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔥 1. Upload to Cloudinary
+    
     const upload = await uploadToCloudinary(file, "sources");
 
-    // 🔥 2. Decide type
-    let type: "pdf" | "file" = "file";
+    
+    let type: "pdf" | "image" | "docx" | "file" = "file";
+
     if (file.type === "application/pdf") {
       type = "pdf";
+    } else if (file.type.startsWith("image/")) {
+      type = "image";
+    } else if (
+      file.type ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      type = "docx";
     }
 
-    // 🔥 3. Extract text (only for supported types)
+    
     let text = "";
 
-    if (type === "pdf") {
-      const res = await fetch("http://localhost:4000/extract", {
+    if (type === "pdf" || type === "image" || type === "docx") {
+      const res = await fetch(process.env.EXTRACT_API_URL!, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          type: "pdf",
+          type,
           url: upload.secure_url,
         }),
       });
 
-      if (!res.ok) throw new Error("Extraction failed");
+      if (!res.ok) {
+        throw new Error("Extraction failed");
+      }
 
       const data = await res.json();
       text = data.text;
+
+      if (!text || text.length < 20) {
+        throw new Error("Empty extraction result");
+      }
     }
 
-    // 🔥 4. Save to DB
+    
     const source = await prisma.source.create({
       data: {
         title: file.name,
@@ -77,6 +94,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ source }, { status: 201 });
+
   } catch (err) {
     console.error("Upload error:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });

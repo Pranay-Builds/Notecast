@@ -1,50 +1,43 @@
+
 import ytDlp from "yt-dlp-exec";
 import * as fs from "fs";
 import * as path from "path";
 import { transcribe } from "../lib/transcribe";
 
-function isLowQuality(text: string) {
-  if (text.length < 100) return true;
-
-  const weirdRatio =
-    (text.match(/[^a-zA-Z0-9\u0900-\u097F\s]/g) || []).length / text.length;
-
-  return weirdRatio > 0.2;
-}
-
 export function getYouTubeVideoId(input: string) {
   try {
-    // If already looks like an ID (11 chars), return it
-    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
-      return input;
-    }
+    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
 
     const url = new URL(input);
 
-    // 1. Standard: youtube.com/watch?v=ID
-    if (url.searchParams.get("v")) {
-      return url.searchParams.get("v");
-    }
-
-    // 2. Short: youtu.be/ID
-    if (url.hostname === "youtu.be") {
-      return url.pathname.slice(1);
-    }
-
-    // 3. Embed: youtube.com/embed/ID
-    if (url.pathname.startsWith("/embed/")) {
-      return url.pathname.split("/")[2];
-    }
-
-    // 4. Shorts: youtube.com/shorts/ID
-    if (url.pathname.startsWith("/shorts/")) {
-      return url.pathname.split("/")[2];
-    }
+    if (url.searchParams.get("v")) return url.searchParams.get("v");
+    if (url.hostname === "youtu.be") return url.pathname.slice(1);
+    if (url.pathname.startsWith("/embed/")) return url.pathname.split("/")[2];
+    if (url.pathname.startsWith("/shorts/")) return url.pathname.split("/")[2];
 
     return null;
-  } catch (e) {
+  } catch {
     return null;
   }
+}
+
+// 🔥 safer fetch
+async function fetchJsonSafe(url: string) {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+  });
+
+  const text = await res.text();
+
+  if (!text || !text.trim().startsWith("{")) {
+    console.log("❌ Invalid subtitle response:", text.slice(0, 200));
+    throw new Error("INVALID_SUBTITLE_RESPONSE");
+  }
+
+  return JSON.parse(text);
 }
 
 export async function getYoutubeSubtitles(videoId: string) {
@@ -55,33 +48,30 @@ export async function getYoutubeSubtitles(videoId: string) {
         skipDownload: true,
         writeAutoSub: true,
         writeSub: true,
-        subLang: "en",
+        subLang: "en.*",
         subFormat: "json3",
-        dumpSingleJson: true,
-      },
+      }
     );
 
-    // 🔥 Try manual subtitles first
-    let captions = result.subtitles?.en || result.automatic_captions?.en;
+    const captions =
+      result.subtitles?.en || result.automatic_captions?.en;
 
     if (!captions || captions.length === 0) {
       throw new Error("NO_CAPTIONS_FOUND");
     }
 
-    // yt-dlp gives multiple formats, pick json3
     const jsonTrack = captions.find((c: any) => c.ext === "json3");
 
     if (!jsonTrack?.url) {
       throw new Error("NO_JSON_TRACK");
     }
 
-    // fetch subtitle JSON
-    const res = await fetch(jsonTrack.url);
-    const data = await res.json();
+    const data = await fetchJsonSafe(jsonTrack.url);
 
-    // 🔥 parse text
     const text = data.events
-      ?.map((e: any) => e.segs?.map((s: any) => s.utf8).join("") || "")
+      ?.map((e: any) =>
+        e.segs?.map((s: any) => s.utf8).join("") || ""
+      )
       .join(" ")
       .replace(/\n/g, " ")
       .trim();
@@ -95,19 +85,21 @@ export async function getYoutubeSubtitles(videoId: string) {
       source: "yt-dlp",
     };
   } catch (err) {
-    console.log("yt-dlp subtitles failed:", err);
+    console.log("⚠️ yt-dlp subtitles failed:", err);
     throw err;
   }
 }
 
 async function downloadYouTubeAudio(videoId: string) {
-  const filePath = path.join(
+  const basePath = path.join(
     process.cwd(),
-    `audio-${videoId}-${Date.now()}.mp3`,
+    `audio-${videoId}-${Date.now()}`
   );
 
+  const filePath = `${basePath}.webm`;
+
   await ytDlp(`https://www.youtube.com/watch?v=${videoId}`, {
-    output: filePath.replace(".mp3", ".webm"),
+    output: filePath,
     format: "bestaudio",
   });
 
@@ -120,8 +112,12 @@ async function whisperFallback(videoId: string) {
   try {
     const result = await transcribe({
       type: "file",
-      path: filePath.replace(".mp3", ".webm"),
+      path: filePath,
     });
+
+    if (!result?.text) {
+      throw new Error("EMPTY_WHISPER_RESULT");
+    }
 
     return result.text;
   } finally {
@@ -138,16 +134,24 @@ export async function extractYoutubeVideoTranscript(input: string) {
     throw new Error("INVALID_YOUTUBE_URL");
   }
 
+  // 🔥 Try subtitles first
   try {
-    const subs = await getYoutubeSubtitles(videoId);
-    console.log(subs);
-    return subs;
-  } catch {
+    return await getYoutubeSubtitles(videoId);
+  } catch (err) {
+    console.log("⚠️ Subtitles failed, trying Whisper...");
+  }
+
+  // 🔥 Fallback to Whisper
+  try {
     const text = await whisperFallback(videoId);
 
     return {
       text,
       source: "whisper",
     };
+  } catch (err) {
+    console.log("❌ Whisper failed:", err);
+    throw new Error("FULL_TRANSCRIPT_FAILED");
   }
 }
+

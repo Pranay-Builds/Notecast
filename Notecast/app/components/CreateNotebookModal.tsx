@@ -1,5 +1,6 @@
 "use client";
 
+import { User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
@@ -98,7 +99,7 @@ export default function CreateNotebookModal({
             </div>
 
             <div className="mt-4">
-              <p className="text-sm text-center text-zinc-400 mb-2">Choose Character</p>
+              <p className="text-sm text-center text-zinc-400 mb-2">Choose a study buddy</p>
 
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {characters.map((char) => (
@@ -106,11 +107,10 @@ export default function CreateNotebookModal({
                     key={char.id}
                     onClick={() => setSelectedCharacter(char.id)}
                     className={`flex flex-col items-center cursor-pointer p-2 rounded-lg transition min-w-[80px]
-          ${
-            selectedCharacter === char.id
-              ? "bg-zinc-800"
-              : "bg-[#0f0f0f]"
-          }`}
+          ${selectedCharacter === char.id
+                        ? "bg-zinc-800"
+                        : "bg-[#0f0f0f]"
+                      }`}
                   >
                     {char.avatarUrl ? (
                       <img
@@ -118,8 +118,8 @@ export default function CreateNotebookModal({
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center text-sm">
-                        👤
+                      <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center">
+                        <User size={20} />
                       </div>
                     )}
 

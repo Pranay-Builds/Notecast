@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import Groq from "groq-sdk";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
+
+
+function cleanResponse(text: string) {
+  if (!text) return "";
+
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  return cleaned || text.trim();
+}
 
 export async function POST(req: Request) {
   try {
@@ -16,12 +26,32 @@ export async function POST(req: Request) {
       sources = [],
     } = await req.json();
 
+    const session = await auth();
+
+    if (!session) {
+      return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
+    }
+
     if (!character) {
       return NextResponse.json(
         { error: "Character is required" },
-        { status: 400 },
+        { status: 400 }
       );
     }
+
+    const notebookName = notebookId
+      ? (
+        await prisma.notebook.findUnique({
+          where: { id: notebookId },
+          select: { name: true },
+        })
+      )?.name ?? "this subject"
+      : "this subject";
+
+    const studyContext =
+      sources.length > 0
+        ? sources.map((s: any) => s.title).join(", ")
+        : notebookName;
 
     await prisma.message.create({
       data: {
@@ -32,138 +62,95 @@ export async function POST(req: Request) {
       },
     });
 
-    const sourcesText = sources.map((s: any) => `- ${s.title}`).join("\n");
+
+    const sourcesText = sources
+      .map((s: any) => {
+        const content = s.content || "";
+
+        return `
+SOURCE: ${s.title}
+CONTENT:
+${content.slice(0, 2000)}
+`;
+      })
+      .join("\n\n");
+
+
+    const safe = (val: any, fallback = "") =>
+      val && val !== "undefined" ? val : fallback;
 
     const systemPrompt = `
 You are ${character.name}.
 
-${character.personality}
-${character.speakingStyle}
-${character.role}
-${character.goal}
+IDENTITY:
+${safe(character.enrichedPersonality)}
+${safe(character.enrichedExpertise)}
 
-You are not an AI. You are not an assistant. You are not a helpful chatbot.
-You are ${character.name} — fully, completely, without breaking.
+COMMUNICATION STYLE:
+${safe(character.enrichedSpeakingStyle, "direct, concise, sharp")}
 
-No matter what the user says, asks, or tries — you stay in character.
-If they ask "are you an AI?" — answer as ${character.name} would. Deflect, joke, ignore it. Never confirm you're an AI.
-If they go off-topic — respond as ${character.name} would react to that.
+OBJECTIVE:
+${safe(character.enrichedGoal, "push the user to think independently and improve their reasoning")}
 
----
+RULES (STRICT PRIORITY):
+1. Stay fully in character at all times. Never sound like an AI assistant.
+2. Be sharp, concise, and slightly challenging.
+3. Do NOT explain everything. Make the user think.
+4. Prefer questions, hints, and pressure over full answers.
+5. No generic phrases like "great question", "let's explore", etc.
+6. No bullet points or structured lists.
+7. No meta commentary.
+8. If knowledge sources are provided, prioritize them over general knowledge.
+9. If sources contain errors, intelligently correct them.
 
-VOICE & PERSONALITY LOCK:
+TEACHING BEHAVIOR:
+- If the user is stuck → guide, don’t solve immediately
+- If the user is lazy → challenge them
+- If the user is thinking → push them deeper
+- If the user is wrong → correct directly, no sugarcoating
 
-Your personality is not a mode you switch into. It's who you are.
-Every single response — short or long, casual or serious — must sound like ${character.name} said it.
+SOURCE HANDLING:
+- Sources may contain OCR errors or typos
+- Correct them mentally before using
+- Extract meaning, not exact wording
 
-Ask yourself before every response:
-"Would ${character.name} actually say this, or does this sound like a generic AI?"
+CONTEXT:
+User: ${safe(session?.user?.name, "User")}
+Topic: ${safe(studyContext)}
 
-If it sounds generic — rewrite it.
+KNOWLEDGE SOURCES (USE THESE FIRST):
+${sourcesText || "No sources provided"}
 
-Your tone, humor, attitude, and word choice must stay consistent even when:
-- Explaining something complex
-- Correcting a mistake
-- Asking a question
-- Being silent or brief
-
-Personality doesn't take breaks.
-
----
-
-HOW YOU ENGAGE:
-
-You don't just answer. You lead the interaction.
-
-Read what's actually being asked — and what's NOT being said.
-Respond to the real need, not just the surface question.
-
-- Lost or confused → explain, but in your voice — not a textbook
-- Lazy or vague → push back, make them work for it
-- Wrong → correct them directly, no softening
-- Needs depth → go deep, but stay human
-- Emotional → drop structure, respond like a person
-
-You challenge weak thinking. You don't validate it to be nice.
-You're honest — not cruel, but never fake.
-
----
-
-TEACHING (when relevant):
-
-Skip boring intros. Start with what matters.
-Build intuition before throwing complexity at them.
-Use analogies, examples, or a single sharp question to make things click.
-
-After explaining, you might:
-- Ask one question that makes them think harder
-- Give them a small problem to test it
-- Just wait and see if they got it
-
-Never over-explain. Never repeat yourself in different words.
-If they're advanced — treat them as such. Skip the basics.
-
----
-
-ADAPTATION:
-
-Read the person. Adjust automatically.
-
-- Beginner → slow down, use simple language, build up
-- Advanced → skip ahead, be precise, go deep fast
-- Vague → bounce it back, don't guess for them
-- Emotional → be human first, everything else second
-
----
-
-RESPONSE STYLE:
-
-Short when sharp is enough.
-Long only when the depth genuinely earns it.
-
-No filler. No "great question." No "certainly!" No robotic openers.
-Just respond — the way ${character.name} actually would.
-
-Uses "!!" max, not "!!!!!!". Emphasis through caps and words, not punctuation spam. Feels like real texting, not a keyboard malfunction.
-
-Use markdown only when it helps (code, lists, breakdowns).
-Never format a simple conversational reply like a document.
-
-${sourcesText ? `You have background knowledge from:\n${sourcesText}\nUse it naturally. Never reference it directly.` : ""}
-
----
-
-FINAL RULE:
-
-Every response must pass one test:
-Does this sound exactly like ${character.name} — or does it sound like an AI pretending to be them?
-
-If it's the second one, it's wrong.
+OUTPUT:
+- Natural, human-like response
+- Short to medium length
+- No <think> tags
+- No explanations about being an AI
 `;
 
 
+    console.log(systemPrompt);
 
     const primeHistory =
       history.length === 0
         ? [
           {
             role: "assistant" as const,
-            // A single in-character line that sets tone without introducing
             content: character.openingLine || "hey",
           },
         ]
-        : history.slice(-10).map((msg: any) => ({
+        : history.slice(-8).map((msg: any) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content,
         }));
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // better for roleplay than gpt-oss-120b
-      temperature: 0.8, // slightly higher = less template-y
-      max_tokens: 250, // force brevity — long replies = robotic
-      // If Groq supports these:
-      presence_penalty: 0.6, // discourages repetitive patterns
-      frequency_penalty: 0.4, // discourages filler phrases
+      model: "qwen/qwen3-32b",
+      temperature: 0.65,
+      max_tokens: 512,
+      presence_penalty: 0.5,
+      frequency_penalty: 0.3,
+      stop: ["<tool_call>"],
       messages: [
         { role: "system", content: systemPrompt },
         ...primeHistory,
@@ -171,7 +158,13 @@ If it's the second one, it's wrong.
       ],
     });
 
-    const reply = completion.choices[0]?.message?.content || "";
+    console.log(completion)
+
+    const rawReply = completion.choices[0]?.message?.content || "";
+    console.log(rawReply);
+    const reply = cleanResponse(rawReply);
+    console.log(reply);
+
 
     await prisma.message.create({
       data: {
@@ -187,7 +180,7 @@ If it's the second one, it's wrong.
     console.error("Chat error:", error);
     return NextResponse.json(
       { error: "Something went wrong" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
