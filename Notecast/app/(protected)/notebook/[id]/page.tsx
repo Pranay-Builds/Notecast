@@ -75,6 +75,8 @@ export default function NotebookPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [characters, setCharacters] = useState<any[]>([]);
+  const [showCharacterMenu, setShowCharacterMenu] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -95,7 +97,21 @@ export default function NotebookPage() {
       setLoading(false);
     };
 
+    const fetchCharacters = async () => {
+      try {
+        const res = await fetch("/api/character");
+        const data = await res.json();
+
+        if (!res.ok) return;
+
+        setCharacters(data.characters);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchNotebook();
+    fetchCharacters();
     fetchMessages();
     fetchSources();
   }, [id]);
@@ -163,6 +179,44 @@ export default function NotebookPage() {
       toast.error("Failed to send message");
     } finally {
       setLoadingMessages(false);
+    }
+  };
+
+  const switchCharacter = async (character: any) => {
+    if (character.id === notebook?.character?.id) return;
+
+    const previousCharacter = notebook?.character;
+
+    setNotebook((prev: any) => ({
+      ...prev,
+      character,
+    }));
+
+    setShowCharacterMenu(false);
+
+    try {
+      const res = await fetch(`/api/notebook/${id}/character`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          newCharacterId: character.id,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
+      toast.success(`Switched to ${character.name}`);
+    } catch {
+      setNotebook((prev: any) => ({
+        ...prev,
+        character: previousCharacter,
+      }));
+
+      toast.error("Failed to switch character");
     }
   };
 
@@ -534,28 +588,69 @@ export default function NotebookPage() {
         <header className="bg-[#181818] border-b border-zinc-800 h-14 flex items-center justify-between px-6">
           <h1 className="font-semibold text-lg">{notebook.name}</h1>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-3">
-              {/* Character Avatar */}
-              {notebook?.character?.avatarUrl ? (
-                <img
-                  src={notebook.character.avatarUrl}
-                  className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
-                  👤
-                </div>
-              )}
+            <div className="relative">
+              <button
+                onClick={() => setShowCharacterMenu((prev) => !prev)}
+                className="flex items-center gap-3 hover:bg-zinc-800 px-3 py-2 rounded-xl transition"
+              >
+                {notebook?.character?.avatarUrl ? (
+                  <img
+                    src={notebook.character.avatarUrl}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
+                    👤
+                  </div>
+                )}
 
-              {/* Text */}
-              <div className="flex flex-col">
-                <span className="text-xs text-zinc-400">
-                  Chatting with{" "}
-                  <span className="text-white font-medium">
+                <div className="flex flex-col text-left">
+                  <span className="text-xs text-zinc-400">Chatting with</span>
+
+                  <span className="text-sm font-medium text-white">
                     {notebook?.character?.name || "No character"}
                   </span>
-                </span>
-              </div>
+                </div>
+              </button>
+
+              {showCharacterMenu && (
+                <div className="absolute top-16 left-0 w-72 bg-[#181818] border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <div className="p-2">
+                    {characters.map((character) => (
+                      <button
+                        key={character.id}
+                        onClick={() => switchCharacter(character)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left hover:bg-zinc-800 ${
+                          notebook?.character?.id === character.id
+                            ? "bg-zinc-800"
+                            : ""
+                        }`}
+                      >
+                        {character.avatarUrl ? (
+                          <img
+                            src={character.avatarUrl}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center">
+                            👤
+                          </div>
+                        )}
+
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">
+                            {character.name}
+                          </span>
+
+                          <span className="text-xs text-zinc-500 truncate">
+                            {character.role}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition active:scale-[0.98]">
               <UserPlus size={16} />
@@ -864,7 +959,7 @@ export default function NotebookPage() {
                           <img
                             src={
                               msg.role === "assistant"
-                                ? notebook?.character?.avatarUrl || ""
+                                ? msg?.character?.avatarUrl || ""
                                 : session?.user?.image ||
                                   `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
                             }

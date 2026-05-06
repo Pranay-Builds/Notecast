@@ -33,13 +33,16 @@ export async function GET(
         notebookId,
       },
       orderBy: {
-        createdAt: "asc", // oldest → newest
+        createdAt: "asc",
       },
-      select: {
-        id: true,
-        role: true,
-        content: true,
-        createdAt: true,
+      include: {
+        character: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 

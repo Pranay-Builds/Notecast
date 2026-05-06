@@ -141,7 +141,7 @@ Does this sound exactly like ${character.name} — or does it sound like an AI p
 If it's the second one, it's wrong.
 `;
 
-
+    console.log(systemPrompt);
 
     const primeHistory =
       history.length === 0
