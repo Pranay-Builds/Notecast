@@ -5,13 +5,11 @@ import { signIn } from "next-auth/react";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#121212] text-white overflow-hidden">
+    <main className="min-h-screen bg-[#0b0b0b] text-white overflow-hidden">
       {/* NAVBAR */}
       <header className="relative z-10">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">
-            studybuddy
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight">studybuddy</h1>
 
           <button
             onClick={() =>
@@ -38,12 +36,10 @@ export default function HomePage() {
 
       {/* HERO */}
       <section className="relative">
-        <div className="max-w-7xl mx-auto px-6 pt-8 lg:pt-14">
-          <div className="grid lg:grid-cols-[0.9fr_1.1fr] items-center gap-10">
+        <div className="max-w-7xl mx-auto px-6 pt-10 lg:pt-16">
+          <div className="grid lg:grid-cols-[0.85fr_1.15fr] items-center gap-14">
             {/* LEFT */}
-            <div className="max-w-xl">
-
-
+            <div className="max-w-[520px]">
               <h1
                 className="
                   text-5xl
@@ -51,7 +47,7 @@ export default function HomePage() {
                   lg:text-7xl
                   font-semibold
                   tracking-tight
-                  leading-[0.95]
+                  leading-[0.93]
                 "
               >
                 Study with AI tutors that actually teach.
@@ -61,13 +57,13 @@ export default function HomePage() {
                 className="
                   mt-6
                   text-lg
-                  text-zinc-400
+                  text-zinc-300
                   leading-relaxed
                   max-w-md
                 "
               >
-                Upload PDFs, lectures, notes, and videos.
-                Learn through conversation and active recall.
+                Upload PDFs, lectures, notes, and videos. Learn through
+                conversation and active recall.
               </p>
 
               <button
@@ -98,20 +94,23 @@ export default function HomePage() {
               <div
                 className="
                   relative
-                  rounded-[32px]
+                  rounded-[36px]
                   overflow-hidden
                   border
                   border-white/10
                 "
               >
-                <div className="relative aspect-[1.2/1]">
+                <div className="relative aspect-[1.18/1]">
                   <Image
                     src="/desk.jpg"
                     alt="Hero"
                     fill
                     priority
-                    className="object-cover"
+                    className="object-cover scale-[1.02]"
                   />
+
+                  {/* CINEMATIC OVERLAY */}
+                  <div className="absolute inset-0 bg-black/10" />
                 </div>
               </div>
             </div>
