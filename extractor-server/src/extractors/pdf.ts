@@ -15,16 +15,29 @@ const globalQueue = new PQueue({ concurrency: 3 });
 const pdfCache = new Map<string, string>();
 
 function isScanned(text: string) {
-  const clean = text.trim();
+  const clean = text.replace(/\s+/g, " ").trim();
 
-  if (clean.length < 100) return true;
+  if (clean.length < 200) return true;
 
   const words = clean.split(/\s+/).length;
-  const spacedChars = (clean.match(/\b\w\s\w\s\w/g) || []).length;
-  const weirdChars = (clean.match(/[^\w\s.,!?]/g) || []).length;
-  const weirdRatio = weirdChars / clean.length;
 
-  return words < 20 || spacedChars > 5 || weirdRatio > 0.3;
+  const avgWordLength =
+    clean.replace(/[^a-zA-Z0-9]/g, "").length / Math.max(words, 1);
+
+  const lineBreaks = (text.match(/\n/g) || []).length;
+
+  const hasStructure =
+    /(\d+\.\s)|([A-Z]{2,})|(\bTable\b|\bFigure\b|\bPage\b)/.test(text);
+
+  const noiseChars = (text.match(/[^a-zA-Z0-9\s.,()%\-]/g) || []).length;
+  const noiseRatio = noiseChars / Math.max(clean.length, 1);
+
+  // decision logic
+  const lowDensity = words < 120;
+  const veryNoisy = noiseRatio > 0.15;
+  const weakStructure = !hasStructure && lineBreaks < 3;
+
+  return lowDensity && (veryNoisy || weakStructure);
 }
 
 // 🔥 retry
@@ -98,7 +111,6 @@ export async function extractFromPDF(url: string) {
 
   let finalText = text;
 
-  // 🔥 OCR only if needed
   if (isScanned(text) && text.length < 5000) {
     console.log("Using OCR fallback");
 
@@ -107,16 +119,14 @@ export async function extractFromPDF(url: string) {
     const MAX_OCR_PAGES = 10;
     const pagesToProcess = Math.min(pages || 10, MAX_OCR_PAGES);
 
-    const results: string[] = [];
 
-    for (let i = 0; i < pagesToProcess; i++) {
-      const res = await globalQueue.add(async () => {
+    const tasks = Array.from({ length: pagesToProcess }, (_, i) =>
+      globalQueue.add(async () => {
         let imagePath: string | undefined;
         let processedPath: string | undefined;
 
         try {
           imagePath = await pdfPageToImage(converter, i + 1);
-
           if (!imagePath) return "";
 
           processedPath = imagePath.replace(".png", "-processed.png");
@@ -124,21 +134,32 @@ export async function extractFromPDF(url: string) {
           await preprocessImage(imagePath, processedPath);
 
           const ocrText = await withRetry(() =>
-            withTimeout(runOCR(processedPath!)),
+            withTimeout(runOCR(processedPath!))
           );
 
           return cleanOCR(ocrText);
         } catch (e) {
-          console.log("OCR page failed:", i);
-          return "";
-        } finally {
-          if (imagePath) await fs.unlink(imagePath).catch(() => {});
-          if (processedPath) await fs.unlink(processedPath).catch(() => {});
-        }
-      });
+          const ocrText = await withRetry(() =>
+            withTimeout(runOCR(processedPath!), 20000),
+            2
+          );
 
-      if (res) results.push(res);
-    }
+          const cleaned = await cleanOCR(ocrText);
+
+          
+          if (cleaned.length < 20) return "";
+
+          return cleaned;
+        } finally {
+          await Promise.all([
+            imagePath ? fs.unlink(imagePath).catch(() => { }) : null,
+            processedPath ? fs.unlink(processedPath).catch(() => { }) : null,
+          ]);
+        }
+      })
+    );
+
+    const results = (await Promise.all(tasks)).filter(Boolean);
 
     const ocrText = results.join("\n\n");
 
