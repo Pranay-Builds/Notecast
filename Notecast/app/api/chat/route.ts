@@ -160,7 +160,7 @@ If it's the second one, it's wrong.
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile", // better for roleplay than gpt-oss-120b
       temperature: 0.8, // slightly higher = less template-y
-      max_tokens: 250, // force brevity — long replies = robotic
+      max_tokens: 512, // force brevity — long replies = robotic
       // If Groq supports these:
       presence_penalty: 0.6, // discourages repetitive patterns
       frequency_penalty: 0.4, // discourages filler phrases

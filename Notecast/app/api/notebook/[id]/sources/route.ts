@@ -31,10 +31,19 @@ export async function GET(
             );
         }
 
-        const sources = await prisma.source.findMany({
+        const sources = await prisma.notebookSource.findMany({
             where: {
                 notebookId: id,
             },
+
+            include: {
+                source: {
+                    include: {
+                        chunks: true,
+                    },
+                },
+            },
+
             orderBy: {
                 createdAt: "desc",
             },

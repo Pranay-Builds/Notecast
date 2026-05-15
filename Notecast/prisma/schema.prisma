@@ -7,6 +7,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SourceType {
+  youtube
+  pdf
+  doc
+  image
+  text
+}
+
+enum ExtractionStatus {
+  processing
+  completed
+  failed
+}
+
+
 model User {
   id            String   @id @default(cuid())
   name          String?
@@ -69,26 +84,12 @@ model Notebook {
 
   messages  Message[]
 
-  sources Source[]
+  sources NotebookSource[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Source {
-  id         String @id @default(cuid())
-  title      String
-  type       String
-  content    String?
-  fileUrl    String?
-  metadata   Json?
-  thumbnail  String?
-
-  notebookId String
-  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-}
 
 model Message {
   id          String @id @default(cuid())
@@ -127,4 +128,57 @@ model Character {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+
+model SourceChunk {
+  id          String @id @default(cuid())
+
+  content     String
+  embedding   Json
+  chunkIndex  Int
+
+  sourceId    String
+  source      ExtractedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@index([sourceId])
+}
+
+model ExtractedSource {
+  id          String   @id @default(cuid())
+
+  sourceKey   String   @unique
+  type        SourceType
+
+  title       String
+  content     String?
+
+  thumbnail   String?
+  metadata    Json?
+
+  status      ExtractionStatus @default(processing)
+
+  chunks      SourceChunk[]
+  notebooks   NotebookSource[]
+
+  createdAt   DateTime @default(now())
+}
+
+model NotebookSource {
+  id          String @id @default(cuid())
+
+  notebookId  String
+  sourceId    String
+
+  fileUrl     String?
+
+  notebook    Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+
+  source      ExtractedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([notebookId, sourceId])
 }

@@ -13,20 +13,37 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const { id } = await params;
 
-        const notebook = await prisma.notebook.findUnique({
+        const notebook = await prisma.notebook.findFirst({
             where: {
-                id: id,
+                id,
                 userId: session.user?.id,
             },
             include: {
-                sources: true,
-                character: true
-            }
+                character: true,
+
+                sources: {
+                    include: {
+                        source: {
+                            select: {
+                                id: true,
+                                title: true,
+                                type: true,
+                                thumbnail: true,
+                                status: true,
+                                createdAt: true,
+                                chunks: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
 
+        console.log(notebook);
 
         return NextResponse.json({ notebook }, { status: 200 })
     } catch (error) {
+        console.log(error);
         return NextResponse.json({ error: "Failed to get notebook." }, { status: 500 });
     }
 };

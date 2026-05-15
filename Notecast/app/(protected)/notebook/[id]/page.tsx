@@ -66,7 +66,6 @@ export default function NotebookPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [url, setUrl] = useState("");
-  const [message, setMessage] = useState("");
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [isAddingYoutube, setIsAddingYoutube] = useState(false);
   const [isAddingWebpage, setIsAddingWebpage] = useState(false);
@@ -158,9 +157,9 @@ export default function NotebookPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: msg, // ✅ USE msg, not state
+          message: msg,
           character: notebook.character,
-          history: messages.slice(-10), // 🔥 IMPORTANT
+          history: messages.slice(-10),
           sources: sources,
           notebookId: notebook.id,
         }),
@@ -620,11 +619,10 @@ export default function NotebookPage() {
                       <button
                         key={character.id}
                         onClick={() => switchCharacter(character)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left hover:bg-zinc-800 ${
-                          notebook?.character?.id === character.id
-                            ? "bg-zinc-800"
-                            : ""
-                        }`}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left hover:bg-zinc-800 ${notebook?.character?.id === character.id
+                          ? "bg-zinc-800"
+                          : ""
+                          }`}
                       >
                         {character.avatarUrl ? (
                           <img
@@ -830,13 +828,12 @@ export default function NotebookPage() {
                     </div>
                     <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ease-out ${
-                          upload.status === "error"
-                            ? "bg-red-500"
-                            : upload.status === "done"
-                              ? "bg-emerald-500"
-                              : "bg-violet-500"
-                        }`}
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${upload.status === "error"
+                          ? "bg-red-500"
+                          : upload.status === "done"
+                            ? "bg-emerald-500"
+                            : "bg-violet-500"
+                          }`}
                         style={{ width: `${upload.progress}%` }}
                       />
                     </div>
@@ -921,8 +918,10 @@ export default function NotebookPage() {
           <div className="flex flex-col flex-1">
             <div className="flex-1 p-4 overflow-y-auto">
               {messages.length === 0 && (
-                <div className="text-zinc-500 text-sm px-2">
-                  Ask anything... {notebook?.character?.name} will help you.
+                <div classNa me="text-zinc-500 text-sm px-2">
+                  {notebook.character
+                    ? `Ask anything... ${notebook.character.name} will help you.`
+                    : "Assign a character to this notebook to start chatting."}
                 </div>
               )}
 
@@ -949,9 +948,8 @@ export default function NotebookPage() {
                     )}
                     <div
                       key={i}
-                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
-                        !isSameSender ? "mt-4" : "mt-2"
-                      }`}
+                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${!isSameSender ? "mt-4" : "mt-2"
+                        }`}
                     >
                       {/* Avatar column — always 40px wide */}
                       <div className="w-10 min-w-[40px] flex justify-center">
@@ -959,9 +957,9 @@ export default function NotebookPage() {
                           <img
                             src={
                               msg.role === "assistant"
-                                ? msg?.character?.avatarUrl || ""
+                                ? msg?.character?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${notebook?.character?.name}`
                                 : session?.user?.image ||
-                                  `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
+                                `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
                             }
                             className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
                           />
@@ -1093,7 +1091,7 @@ export default function NotebookPage() {
 
             <ChatInput
               onSend={sendMessage}
-              placeholder={`Message ${notebook.character.name}`}
+              placeholder={notebook.character ? `Message ${notebook.character.name}` : "Select a character to start chatting"}
             />
           </div>
         </div>

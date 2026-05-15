@@ -11,107 +11,172 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user?.id;
+
     const { url, notebookId, title, thumbnail } = await req.json();
 
     if (!url || !notebookId) {
       return NextResponse.json(
         { error: "URL and notebookId are required" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     const notebook = await prisma.notebook.findFirst({
-      where: { id: notebookId, userId },
+      where: {
+        id: notebookId,
+        userId,
+      },
     });
 
     if (!notebook) {
       return NextResponse.json(
         { error: "Notebook not found" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
-    const cached = await prisma.source.findFirst({
+    const sourceKey = `youtube:${url}`;
+
+    // CHECK GLOBAL CACHE
+    const cached = await prisma.extractedSource.findUnique({
       where: {
-        fileUrl: url,
-        content: {
-          not: null, // ensure it has extracted content
-        },
+        sourceKey,
       },
     });
 
-    
+    // IF SOURCE ALREADY EXISTS
     if (cached) {
-      const source = await prisma.source.create({
+
+      // CHECK IF ALREADY ATTACHED TO NOTEBOOK
+      const existingNotebookSource =
+        await prisma.notebookSource.findUnique({
+          where: {
+            notebookId_sourceId: {
+              notebookId,
+              sourceId: cached.id,
+            },
+          },
+        });
+
+      if (existingNotebookSource) {
+        return NextResponse.json(
+          { error: "Source already added" },
+          { status: 400 }
+        );
+      }
+
+      // ATTACH TO NOTEBOOK
+      await prisma.notebookSource.create({
         data: {
-          title: title || cached.title,
-          type: "youtube",
-          fileUrl: url,
-          content: cached.content,
-          thumbnail: cached.thumbnail,
           notebookId,
+          sourceId: cached.id,
+          fileUrl: url,
         },
       });
 
-      return NextResponse.json({ source, cached: true }, { status: 201 });
-    }
-
-    const existing = await prisma.source.findFirst({
-      where: {
-        fileUrl: url,
-        notebookId,
-      },
-    });
-
-    if (existing) {
       return NextResponse.json(
-        { error: "Source already added" },
-        { status: 400 },
+        {
+          cached: true,
+          source: cached,
+        },
+        { status: 201 }
       );
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-
-    const res = await fetch("http://localhost:4000/extract", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    // CREATE PROCESSING SOURCE
+    const extractedSource = await prisma.extractedSource.create({
+      data: {
+        sourceKey,
         type: "youtube",
-        url,
-      }),
-      signal: controller.signal,
+        title: title || url,
+        thumbnail,
+        status: "processing",
+      },
     });
 
-    clearTimeout(timeout);
+    const controller = new AbortController();
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || "Extraction failed");
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 180000);
+
+    try {
+      const res = await fetch(
+        `${process.env.EXTRACT_API_URL}/extract`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "youtube",
+            url,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Extraction failed");
+      }
+
+      const data = await res.json();
+
+      // UPDATE SOURCE CONTENT
+      await prisma.extractedSource.update({
+        where: {
+          id: extractedSource.id,
+        },
+        data: {
+          content: data.text,
+          status: "completed",
+        },
+      });
+
+      // STORE CHUNKS + EMBEDDINGS
+      await prisma.sourceChunk.createMany({
+        data: data.chunks.map(
+          (
+            chunk: {
+              content: string;
+              embedding: number[];
+              index: number;
+            }
+          ) => ({
+            content: chunk.content,
+            embedding: chunk.embedding,
+            chunkIndex: chunk.index,
+            sourceId: extractedSource.id,
+          })
+        ),
+      });
+
+      // ATTACH TO NOTEBOOK
+      await prisma.notebookSource.create({
+        data: {
+          notebookId,
+          sourceId: extractedSource.id,
+          fileUrl: url,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          source: extractedSource,
+        },
+        { status: 201 }
+      );
+
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const data = await res.json();
-    const text = data.text;
-
-    const source = await prisma.source.create({
-      data: {
-        title: title || url,
-        type: "youtube",
-        fileUrl: url,
-        content: text,
-        thumbnail: thumbnail,
-        notebookId,
-      },
-    });
-
-    return NextResponse.json({ source }, { status: 201 });
   } catch (err) {
-    console.error("Error in source/youtube route: ", err);
+    console.error("Error in source/youtube route:", err);
+
     return NextResponse.json(
       { error: "Failed to save YouTube source" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

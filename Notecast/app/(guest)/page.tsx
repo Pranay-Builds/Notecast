@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#0b0b0b] text-white overflow-hidden">
+    <main className="min-h-screen bg-[#0b0b0b] text-white overflow-hidden p-2">
       {/* NAVBAR */}
       <header className="relative z-10">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -63,7 +63,7 @@ export default function HomePage() {
                 "
               >
                 Upload PDFs, lectures, notes, and videos. Learn through
-                conversation and active recall.
+                conversation and active recall
               </p>
 
               <button

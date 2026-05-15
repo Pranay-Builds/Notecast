@@ -70,7 +70,7 @@ export default function Characters() {
 
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-semibold">Characters</h1>
+                <h1 className="text-3xl font-semibold">Tutors</h1>
 
                 <button
                     onClick={() => {
@@ -80,7 +80,7 @@ export default function Characters() {
                     className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition"
                 >
                     <Plus size={16} />
-                    Create Character
+                    Create Tutor
                 </button>
             </div>
 
@@ -104,11 +104,11 @@ export default function Characters() {
             {!loading && characters.length === 0 && (
                 <div className="border border-zinc-800 bg-[#181818] rounded-xl p-12 text-center">
                     <h3 className="text-lg font-semibold mb-2">
-                        No study buddies yet
+                        No tutor yet
                     </h3>
 
                     <p className="text-zinc-400 mb-4">
-                        Create your first study buddy to start learning
+                        Create your first tutor to start learning
                     </p>
 
                     <button
