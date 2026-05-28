@@ -1,17 +1,45 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { uploadToCloudinary } from "@/lib/uploadToCloudinary";
+import { callExtract, getExtractApiUrl } from "@/lib/extractApi";
 import { NextRequest, NextResponse } from "next/server";
+
+async function attachToNotebook(
+  notebookId: string,
+  sourceId: string,
+  fileUrl?: string,
+) {
+  return prisma.notebookSource.upsert({
+    where: {
+      notebookId_sourceId: { notebookId, sourceId },
+    },
+    create: {
+      notebookId,
+      sourceId,
+      fileUrl,
+    },
+    update: {
+      fileUrl,
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { session, error } = await requireAuth();
 
-    if (error) {
-      return NextResponse.json({ error }, { status: 401 });
-    }
+    if (error) return error;
 
     const userId = session.user?.id;
+
+    try {
+      getExtractApiUrl();
+    } catch {
+      return NextResponse.json(
+        { error: "Extraction service is not configured" },
+        { status: 503 },
+      );
+    }
 
     const formData = await req.formData();
 
@@ -21,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (!file || !notebookId) {
       return NextResponse.json(
         { error: "File or notebookId missing" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -35,11 +63,10 @@ export async function POST(req: NextRequest) {
     if (!notebook) {
       return NextResponse.json(
         { error: "Notebook not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // UPLOAD FILE
     const upload = await uploadToCloudinary(file, "sources");
 
     const mime = file.type;
@@ -48,8 +75,12 @@ export async function POST(req: NextRequest) {
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "image/jpeg", "image/jpg", "image/png", "image/webp",
-      "text/plain", "text/markdown",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "text/plain",
+      "text/markdown",
     ];
 
     if (!ALLOWED_MIMES.includes(mime)) {
@@ -63,67 +94,55 @@ export async function POST(req: NextRequest) {
     else if (mime.startsWith("image/")) type = "image";
     else if (mime === "text/plain" || mime === "text/markdown") type = "text";
 
-
-    // GLOBAL CACHE KEY
     const sourceKey = `${type}:${upload.secure_url}`;
 
-    // CHECK CACHE
     const cached = await prisma.extractedSource.findUnique({
-      where: {
-        sourceKey,
-      },
+      where: { sourceKey },
     });
 
-    // CACHE HIT
     if (cached) {
-
-      // CHECK NOTEBOOK DUPLICATE
-      const existingNotebookSource =
-        await prisma.notebookSource.findUnique({
-          where: {
-            notebookId_sourceId: {
-              notebookId,
-              sourceId: cached.id,
-            },
-          },
-        });
-
-      if (existingNotebookSource) {
+      if (cached.status === "failed") {
         return NextResponse.json(
-          { error: "Source already added" },
-          { status: 400 }
+          { error: "Source extraction previously failed" },
+          { status: 400 },
         );
       }
 
-      // ATTACH TO NOTEBOOK
-      await prisma.notebookSource.create({
-        data: {
-          notebookId,
-          sourceId: cached.id,
-          fileUrl: upload.secure_url,
-        },
-      });
+      try {
+        await attachToNotebook(notebookId, cached.id, upload.secure_url);
+      } catch (err: any) {
+        if (err?.code === "P2002") {
+          return NextResponse.json(
+            { error: "Source already added" },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
 
       return NextResponse.json(
         {
           cached: true,
           source: cached,
         },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
-    // CREATE SOURCE
-    const extractedSource = await prisma.extractedSource.create({
-      data: {
+    const extractedSource = await prisma.extractedSource.upsert({
+      where: { sourceKey },
+      create: {
         sourceKey,
         type,
         title: file.name,
         status: "processing",
       },
+      update: {
+        status: "processing",
+      },
     });
 
-    let extractBody: any;
+    let extractBody: Record<string, unknown>;
 
     if (type === "text") {
       const textContent = await file.text();
@@ -132,65 +151,71 @@ export async function POST(req: NextRequest) {
       extractBody = { type, url: upload.secure_url };
     }
 
-    const res = await fetch(`${process.env.EXTRACT_API_URL}/extract`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(extractBody),
-    });
+    try {
+      const data = await callExtract(extractBody);
 
-    const data = await res.json();
+      await prisma.extractedSource.update({
+        where: { id: extractedSource.id },
+        data: {
+          content: data.text,
+          status: "completed",
+        },
+      });
 
-    // UPDATE SOURCE
-    await prisma.extractedSource.update({
-      where: {
-        id: extractedSource.id,
-      },
-      data: {
-        content: data.text,
-        status: "completed",
-      },
-    });
+      await prisma.sourceChunk.deleteMany({
+        where: { sourceId: extractedSource.id },
+      });
 
-    // STORE CHUNKS
-    await prisma.sourceChunk.createMany({
-      data: data.chunks.map(
-        (
-          chunk: {
-            content: string;
-            embedding: number[];
-            index: number;
-          }
-        ) => ({
-          content: chunk.content,
-          embedding: chunk.embedding,
-          chunkIndex: chunk.index,
-          sourceId: extractedSource.id,
-        })
-      ),
-    });
+      if (data.chunks?.length) {
+        await prisma.sourceChunk.createMany({
+          data: data.chunks.map(
+            (chunk: {
+              content: string;
+              embedding: number[];
+              index: number;
+            }) => ({
+              content: chunk.content,
+              embedding: chunk.embedding,
+              chunkIndex: chunk.index,
+              sourceId: extractedSource.id,
+            }),
+          ),
+        });
+      }
 
-    // ATTACH TO NOTEBOOK
-    await prisma.notebookSource.create({
-      data: {
+      await attachToNotebook(
         notebookId,
-        sourceId: extractedSource.id,
-        fileUrl: upload.secure_url,
-      },
+        extractedSource.id,
+        upload.secure_url,
+      );
+    } catch (err) {
+      await prisma.extractedSource.update({
+        where: { id: extractedSource.id },
+        data: { status: "failed" },
+      });
+      console.log(err);
+      return NextResponse.json(
+        { error: "Extraction failed", source: { ...extractedSource, status: "failed" } },
+        { status: 502 },
+      );
+    }
+
+    const completed = await prisma.extractedSource.findUnique({
+      where: { id: extractedSource.id },
     });
 
     return NextResponse.json(
       {
-        source: extractedSource,
+        source: completed,
       },
-      { status: 201 }
+      { status: 201 },
     );
-
   } catch (err) {
     console.error("Upload error:", err);
 
     return NextResponse.json(
       { error: "Upload failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

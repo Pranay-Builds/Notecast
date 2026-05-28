@@ -10,26 +10,24 @@ export async function DELETE(
     try {
         const { session, error } = await requireAuth();
 
-        if (error) {
-            return NextResponse.json({ error }, { status: 401 });
-        }
+        if (error) return error;
 
         const userId = session.user?.id;
         const { id } = await params;
 
         // Verify source belongs to a notebook owned by this user
-        const source = await prisma.source.findFirst({
+        const notebookSource = await prisma.notebookSource.findFirst({
             where: {
-                id,
+                sourceId: id,
                 notebook: { userId },
             },
         });
 
-        if (!source) {
+        if (!notebookSource) {
             return NextResponse.json({ error: "Source not found" }, { status: 404 });
         }
 
-        await prisma.source.delete({ where: { id: id } });
+        await prisma.notebookSource.delete({ where: { id: notebookSource.id } });
 
         return NextResponse.json({ success: true });
     } catch (err) {

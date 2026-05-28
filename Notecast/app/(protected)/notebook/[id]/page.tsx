@@ -50,6 +50,7 @@ type Source = {
   type: "file" | "youtube" | "webpage" | "text" | "video" | "audio";
   title: string;
   preview?: string;
+  status?: "processing" | "completed" | "failed";
 };
 
 export default function NotebookPage() {
@@ -79,6 +80,11 @@ export default function NotebookPage() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const isSendingMessageRef = useRef(false);
+  const isAddingYoutubeRef = useRef(false);
+  const isAddingWebpageRef = useRef(false);
+  const isAddingTextRef = useRef(false);
+  const progressIntervalsRef = useRef<ReturnType<typeof setInterval>[]>([]);
 
   useEffect(() => {
     const fetchNotebook = async () => {
@@ -115,6 +121,13 @@ export default function NotebookPage() {
     fetchSources();
   }, [id]);
 
+  useEffect(() => {
+    return () => {
+      progressIntervalsRef.current.forEach(clearInterval);
+      progressIntervalsRef.current = [];
+    };
+  }, []);
+
   const fetchSources = async () => {
     setSourcesLoading(true);
     try {
@@ -128,7 +141,8 @@ export default function NotebookPage() {
           id: s.id,
           type: s.type,
           title: s.title,
-          preview: s.fileUrl,
+          preview: s.preview,
+          status: s.status,
         })),
       );
     } catch (error) {
@@ -139,7 +153,11 @@ export default function NotebookPage() {
   };
 
   const sendMessage = async (msg: string) => {
-    if (!msg.trim() || !notebook?.character) return;
+    if (isSendingMessageRef.current || !msg.trim() || !notebook?.character) return;
+
+    isSendingMessageRef.current = true;
+
+    const historyForApi = messages.slice(-10);
 
     const userMsg = {
       role: "user",
@@ -159,13 +177,17 @@ export default function NotebookPage() {
         body: JSON.stringify({
           message: msg,
           character: notebook.character,
-          history: messages.slice(-10),
+          history: historyForApi,
           sources: sources,
           notebookId: notebook.id,
         }),
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send message");
+      }
 
       const botMsg = {
         role: "assistant",
@@ -175,9 +197,11 @@ export default function NotebookPage() {
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
+      setMessages((prev) => prev.slice(0, -1));
       toast.error("Failed to send message");
     } finally {
       setLoadingMessages(false);
+      isSendingMessageRef.current = false;
     }
   };
 
@@ -220,16 +244,18 @@ export default function NotebookPage() {
   };
 
   const fetchMessages = async () => {
-    try {
-      const res = await fetch(`/api/notebook/${id}/messages`);
-      const data = await res.json();
+    if (isSendingMessageRef.current || loadingMessages) return;
 
-      console.log(data);
+    try {
+      const res = await fetch(`/api/notebook/${id}/messages?limit=100`);
+      const data = await res.json();
 
       if (!res.ok) return;
 
-      console.log(messages);
-      setMessages(data.messages);
+      setMessages((prev) => {
+        if (isSendingMessageRef.current) return prev;
+        return data.messages;
+      });
     } catch (err) {
       console.error(err);
     }
@@ -272,12 +298,19 @@ export default function NotebookPage() {
   };
 
   // ─── Simulated progress helper ──────────────────────────────────────────────
+  const clearProgressInterval = (interval: ReturnType<typeof setInterval>) => {
+    clearInterval(interval);
+    progressIntervalsRef.current = progressIntervalsRef.current.filter(
+      (i) => i !== interval,
+    );
+  };
+
   const simulateProgress = (uploadId: string) => {
     let progress = 0;
     const interval = setInterval(() => {
       progress += Math.random() * 18 + 5;
       if (progress >= 90) {
-        clearInterval(interval);
+        clearProgressInterval(interval);
         progress = 90;
       }
       setUploads((prev) =>
@@ -286,6 +319,7 @@ export default function NotebookPage() {
         ),
       );
     }, 200);
+    progressIntervalsRef.current.push(interval);
     return interval;
   };
 
@@ -360,8 +394,12 @@ export default function NotebookPage() {
 
       try {
         const uploaded = await uploadFile(file);
-        clearInterval(interval);
+        clearProgressInterval(interval);
         finalizeUpload(uploadId, "done");
+
+        if (uploaded.status === "failed") {
+          throw new Error("Extraction failed");
+        }
 
         setSources((prev) => [
           ...prev,
@@ -369,13 +407,14 @@ export default function NotebookPage() {
             id: uploaded.id,
             type: getFileSourceType(file),
             title: uploaded.title,
+            status: uploaded.status || "completed",
             preview: file.type.startsWith("image/")
               ? URL.createObjectURL(file)
               : undefined,
           },
         ]);
       } catch {
-        clearInterval(interval);
+        clearProgressInterval(interval);
         finalizeUpload(uploadId, "error");
         toast.error(`Failed to upload ${file.name}`);
       }
@@ -392,14 +431,15 @@ export default function NotebookPage() {
       body: formData,
     });
 
-    if (!res.ok) throw new Error("Upload failed");
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
     return data.source;
   };
 
   // ─── YouTube ─────────────────────────────────────────────────────────────────
   const addVideo = async () => {
-    if (!url.trim()) return;
+    if (isAddingYoutubeRef.current || !url.trim()) return;
+    isAddingYoutubeRef.current = true;
     setIsAddingYoutube(true);
 
     const uploadId = crypto.randomUUID();
@@ -431,8 +471,12 @@ export default function NotebookPage() {
       if (!res.ok) throw new Error("Failed to save YouTube source");
       const data = await res.json();
 
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "done");
+
+      if (data.source?.status === "failed") {
+        throw new Error("Extraction failed");
+      }
 
       setSources((prev) => [
         ...prev,
@@ -440,6 +484,7 @@ export default function NotebookPage() {
           id: data.source.id,
           type: "youtube",
           title: oembed.title,
+          status: data.source.status || "completed",
           preview: oembed.thumbnail_url,
         },
       ]);
@@ -447,17 +492,19 @@ export default function NotebookPage() {
       setUrl("");
       toast.success("YouTube video added");
     } catch (err: any) {
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "error");
       toast.error(err.message || "Invalid YouTube URL");
     } finally {
+      isAddingYoutubeRef.current = false;
       setIsAddingYoutube(false);
     }
   };
 
   // ─── Webpage ─────────────────────────────────────────────────────────────────
   const addWebpage = async () => {
-    if (!webUrl.trim()) return;
+    if (isAddingWebpageRef.current || !webUrl.trim()) return;
+    isAddingWebpageRef.current = true;
     setIsAddingWebpage(true);
 
     const uploadId = crypto.randomUUID();
@@ -477,8 +524,12 @@ export default function NotebookPage() {
       if (!res.ok) throw new Error("Failed to save webpage");
       const data = await res.json();
 
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "done");
+
+      if (data.source?.status === "failed") {
+        throw new Error("Extraction failed");
+      }
 
       setSources((prev) => [
         ...prev,
@@ -486,23 +537,26 @@ export default function NotebookPage() {
           id: data.source.id,
           type: "webpage",
           title: data.source.title || webUrl,
+          status: data.source.status || "completed",
         },
       ]);
 
       setWebUrl("");
       toast.success("Webpage added");
     } catch (err: any) {
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "error");
       toast.error(err.message || "Failed to add webpage");
     } finally {
+      isAddingWebpageRef.current = false;
       setIsAddingWebpage(false);
     }
   };
 
   // ─── Text / Notes ─────────────────────────────────────────────────────────────
   const addText = async () => {
-    if (!pastedText.trim()) return;
+    if (isAddingTextRef.current || !pastedText.trim()) return;
+    isAddingTextRef.current = true;
     setIsAddingText(true);
 
     const uploadId = crypto.randomUUID();
@@ -522,8 +576,12 @@ export default function NotebookPage() {
       if (!res.ok) throw new Error("Failed to save text");
       const data = await res.json();
 
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "done");
+
+      if (data.source?.status === "failed") {
+        throw new Error("Extraction failed");
+      }
 
       setSources((prev) => [
         ...prev,
@@ -532,29 +590,36 @@ export default function NotebookPage() {
           type: "text",
           title:
             pastedText.slice(0, 60) + (pastedText.length > 60 ? "..." : ""),
+          status: data.source.status || "completed",
         },
       ]);
 
       setPastedText("");
       toast.success("Text source added");
     } catch (err: any) {
-      clearInterval(interval);
+      clearProgressInterval(interval);
       finalizeUpload(uploadId, "error");
       toast.error(err.message || "Failed to add text");
     } finally {
+      isAddingTextRef.current = false;
       setIsAddingText(false);
     }
   };
 
   // ─── Delete Source ────────────────────────────────────────────────────────────
-  const deleteSource = async (sourceId: string, index: number) => {
-    if (!confirm("Are you sure you want to delete this?")) return;
-    setSources((prev) => prev.filter((_, i) => i !== index));
+  const deleteSource = async (sourceId: string) => {
+    if (!confirm("Are you sure?")) return;
+
+    // TODO: move delete to a non-blocking background job for large notebooks
+    const previousSources = sources;
+    setSources((prev) => prev.filter((s) => s.id !== sourceId));
 
     try {
-      await fetch(`/api/source/${sourceId}`, { method: "DELETE" });
-      toast.success("Source deleted successfully!");
+      const res = await fetch(`/api/source/${sourceId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      toast.success("Source deleted");
     } catch {
+      setSources(previousSources);
       toast.error("Failed to delete source");
     }
   };
@@ -650,14 +715,7 @@ export default function NotebookPage() {
                 </div>
               )}
             </div>
-            <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition active:scale-[0.98]">
-              <UserPlus size={16} />
-              Add Friends
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg border border-zinc-700 bg-[#181818] hover:bg-zinc-800 transition">
-              <Share size={16} />
-              Share
-            </button>
+
 
             <button
               onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -675,6 +733,7 @@ export default function NotebookPage() {
             onDragEnter={(e) => {
               e.preventDefault();
               setIsDragging(true);
+
             }}
             onDragOver={(e) => e.preventDefault()}
             onDragLeave={(e) => {
@@ -864,7 +923,11 @@ export default function NotebookPage() {
                 sources.map((source, index) => (
                   <div
                     key={source.id}
-                    className="group flex items-center justify-between bg-[#181818] border border-zinc-800 px-3 py-2 rounded-lg hover:bg-zinc-800 transition"
+                    className={`group flex items-center justify-between bg-[#181818] border px-3 py-2 rounded-lg hover:bg-zinc-800 transition ${
+                      source.status === "failed"
+                        ? "border-red-900/60"
+                        : "border-zinc-800"
+                    }`}
                   >
                     <div className="flex items-center gap-2 truncate">
                       {source.preview && source.type === "file" ? (
@@ -902,9 +965,19 @@ export default function NotebookPage() {
                       <span className="text-sm truncate max-w-[180px]">
                         {source.title}
                       </span>
+                      {source.status === "failed" && (
+                        <span className="text-[10px] text-red-400 shrink-0">
+                          Failed
+                        </span>
+                      )}
+                      {source.status === "processing" && (
+                        <span className="text-[10px] text-amber-400 shrink-0">
+                          Processing
+                        </span>
+                      )}
                     </div>
                     <button
-                      onClick={() => deleteSource(source.id, index)}
+                      onClick={() => deleteSource(source.id)}
                       className="opacity-0 group-hover:opacity-100 transition shrink-0 ml-2 hover:text-red-400"
                     >
                       <X size={16} />
@@ -918,7 +991,7 @@ export default function NotebookPage() {
           <div className="flex flex-col flex-1">
             <div className="flex-1 p-4 overflow-y-auto">
               {messages.length === 0 && (
-                <div classNa me="text-zinc-500 text-sm px-2">
+                <div className="text-zinc-500 text-sm px-2">
                   {notebook.character
                     ? `Ask anything... ${notebook.character.name} will help you.`
                     : "Assign a character to this notebook to start chatting."}

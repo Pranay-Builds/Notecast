@@ -3,6 +3,7 @@ dotenv.config();
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import extractRoute from "./routes/extract";
+import embedRoute from "./routes/embed";
 
 
 const fastify = Fastify({
@@ -13,6 +14,7 @@ const fastify = Fastify({
 async function start() {
     await fastify.register(cors);
     await fastify.register(extractRoute);
+    await fastify.register(embedRoute);
 
     fastify.get("/", async (req, reply) => {
         reply.send("Extraction API running")

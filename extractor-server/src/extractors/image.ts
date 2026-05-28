@@ -27,8 +27,11 @@ export async function extractFromImageUrl(url: string) {
 
   const id = Date.now().toString();
 
-  const rawPath = path.join(process.cwd(), `img-${id}.png`);
-  const processedPath = path.join(process.cwd(), `img-${id}-proc.png`);
+  const tmpDir = path.join(os.tmpdir(), "notecast-images");
+  await fs.mkdir(tmpDir, { recursive: true });
+
+  const rawPath = path.join(tmpDir, `img-${id}.png`);
+  const processedPath = path.join(tmpDir, `img-${id}-proc.png`);
 
   try {
     

@@ -139,7 +139,7 @@ export async function extractYoutubeVideoTranscript(input: string) {
     const text = await getCaptions(videoId);
 
     if (isBad(text)) throw new Error("LOW_QUALITY_CAPTIONS");
-
+    console.log("YOUTUBE MANUAL CAPTIONS USED");
     return {
       text,
       source: "captions",

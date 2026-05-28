@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import PQueue from "p-queue";
 import { extractFromPDF } from "../extractors/pdf";
 import { extractYoutubeVideoTranscript } from "../extractors/youtube";
 import { extractText } from "../extractors/text";
@@ -6,6 +7,8 @@ import { extractFromDocxUrl } from "../extractors/docx";
 import { extractFromImageUrl } from "../extractors/image";
 import { chunkText } from "../utils/chunk";
 import { embedText } from "../lib/embed";
+
+const embedQueue = new PQueue({ concurrency: 12 });
 
 type ExtractRequest =
   | { type: "youtube" | "pdf" | "doc" | "image"; url: string }
@@ -61,11 +64,13 @@ export default async function extractRoute(fastify: FastifyInstance) {
 
 
       const embeddedChunks = await Promise.all(
-        chunks.map(async (chunk, index) => ({
-          content: chunk,
-          embedding: await embedText(chunk),
-          index,
-        }))
+        chunks.map((chunk, index) =>
+          embedQueue.add(async () => ({
+            content: chunk,
+            embedding: await embedText(chunk),
+            index,
+          })),
+        ),
       );
 
 

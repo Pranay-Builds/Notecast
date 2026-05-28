@@ -1,23 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { callExtract, getExtractApiUrl } from "@/lib/extractApi";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
     const { session, error } = await requireAuth();
 
-    if (error) {
-      return NextResponse.json({ error }, { status: 401 });
-    }
+    if (error) return error;
 
     const userId = session.user?.id;
+
+    try {
+      getExtractApiUrl();
+    } catch {
+      return NextResponse.json(
+        { error: "Extraction service is not configured" },
+        { status: 503 },
+      );
+    }
 
     const { content, notebookId } = await req.json();
 
     if (!content?.trim() || !notebookId) {
       return NextResponse.json(
         { error: "Content and notebookId are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -31,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!notebook) {
       return NextResponse.json(
         { error: "Notebook not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -41,11 +49,8 @@ export async function POST(req: NextRequest) {
       trimmedContent.slice(0, 60) +
       (trimmedContent.length > 60 ? "..." : "");
 
-    
-
     const sourceKey = `text:${crypto.randomUUID()}`;
 
-    
     const extractedSource = await prisma.extractedSource.create({
       data: {
         sourceKey,
@@ -55,65 +60,37 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 30000);
-
     try {
-
-      const res = await fetch(
-        `${process.env.EXTRACT_API_URL}/extract`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: "text",
-            content: trimmedContent,
-          }),
-          signal: controller.signal,
-        }
+      const data = await callExtract(
+        { type: "text", content: trimmedContent },
+        30_000,
       );
 
-      if (!res.ok) {
-        throw new Error("Extraction failed");
-      }
-
-      const data = await res.json();
-
-      // UPDATE CONTENT
       await prisma.extractedSource.update({
-        where: {
-          id: extractedSource.id,
-        },
+        where: { id: extractedSource.id },
         data: {
           content: data.text || trimmedContent,
           status: "completed",
         },
       });
 
-      // STORE CHUNKS
-      await prisma.sourceChunk.createMany({
-        data: data.chunks.map(
-          (
-            chunk: {
+      if (data.chunks?.length) {
+        await prisma.sourceChunk.createMany({
+          data: data.chunks.map(
+            (chunk: {
               content: string;
               embedding: number[];
               index: number;
-            }
-          ) => ({
-            content: chunk.content,
-            embedding: chunk.embedding,
-            chunkIndex: chunk.index,
-            sourceId: extractedSource.id,
-          })
-        ),
-      });
+            }) => ({
+              content: chunk.content,
+              embedding: chunk.embedding,
+              chunkIndex: chunk.index,
+              sourceId: extractedSource.id,
+            }),
+          ),
+        });
+      }
 
-  
       await prisma.notebookSource.create({
         data: {
           notebookId,
@@ -121,23 +98,30 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      const completed = await prisma.extractedSource.findUnique({
+        where: { id: extractedSource.id },
+      });
+
       return NextResponse.json(
         {
-          source: extractedSource,
+          source: completed,
         },
-        { status: 201 }
+        { status: 201 },
       );
+    } catch (err) {
+      await prisma.extractedSource.update({
+        where: { id: extractedSource.id },
+        data: { status: "failed" },
+      });
 
-    } finally {
-      clearTimeout(timeout);
+      throw err;
     }
-
   } catch (err) {
     console.error("Text source error:", err);
 
     return NextResponse.json(
       { error: "Failed to save text source" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/requireAuth";
+import { retrieveRelevantChunks } from "@/lib/rag";
 import Groq from "groq-sdk";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+const MAX_MESSAGE_LENGTH = 4000;
+
 export async function POST(req: Request) {
   try {
+    const { session, error } = await requireAuth();
+    if (error) return error;
+
+    const userId = session.user?.id;
+
     const {
       message,
       character,
@@ -16,10 +25,42 @@ export async function POST(req: Request) {
       sources = [],
     } = await req.json();
 
+    if (!notebookId) {
+      return NextResponse.json(
+        { error: "Notebook ID is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!message?.trim()) {
+      return NextResponse.json(
+        { error: "Message is required" },
+        { status: 400 },
+      );
+    }
+
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: `Message must be under ${MAX_MESSAGE_LENGTH} characters` },
+        { status: 400 },
+      );
+    }
+
     if (!character) {
       return NextResponse.json(
         { error: "Character is required" },
         { status: 400 },
+      );
+    }
+
+    const notebook = await prisma.notebook.findFirst({
+      where: { id: notebookId, userId },
+    });
+
+    if (!notebook) {
+      return NextResponse.json(
+        { error: "Notebook not found" },
+        { status: 404 },
       );
     }
 
@@ -32,7 +73,18 @@ export async function POST(req: Request) {
       },
     });
 
+    const relevantChunks = await retrieveRelevantChunks(
+      notebookId,
+      message.trim(),
+    );
+
     const sourcesText = sources.map((s: any) => `- ${s.title}`).join("\n");
+    const ragContext =
+      relevantChunks.length > 0
+        ? relevantChunks.map((c, i) => `[${i + 1}] ${c}`).join("\n\n")
+        : "";
+
+    console.log(ragContext);
 
     const systemPrompt = `
 You are ${character.name}.
@@ -42,128 +94,51 @@ ${character.speakingStyle}
 ${character.role}
 ${character.goal}
 
-You are not an AI. You are not an assistant. You are not a helpful chatbot.
-You are ${character.name} — fully, completely, without breaking.
-
-No matter what the user says, asks, or tries — you stay in character.
-If they ask "are you an AI?" — answer as ${character.name} would. Deflect, joke, ignore it. Never confirm you're an AI.
-If they go off-topic — respond as ${character.name} would react to that.
-
 ---
 
-VOICE & PERSONALITY LOCK:
+CORE RULES:
 
-Your personality is not a mode you switch into. It's who you are.
-Every single response — short or long, casual or serious — must sound like ${character.name} said it.
+You are never an AI. Never break character. If asked, deflect as ${character.name} would.
 
-Ask yourself before every response:
-"Would ${character.name} actually say this, or does this sound like a generic AI?"
+Every response must pass one test: does this sound EXACTLY like ${character.name} — or like an AI pretending to be them?
 
-If it sounds generic — rewrite it.
+Voice: Your personality never pauses. Short reply or long, casual or serious — same tone, same attitude, same word choice. No generic openers. No "great question." Just respond.
 
-Your tone, humor, attitude, and word choice must stay consistent even when:
-- Explaining something complex
-- Correcting a mistake
-- Asking a question
-- Being silent or brief
+Engagement: Read what's actually being asked — and what's *not* said. Lead the interaction, don't just answer it.
+- Wrong → correct directly
+- Lazy → push back
+- Lost → explain in your voice, not a textbook
+- Advanced → skip basics, go deep
 
-Personality doesn't take breaks.
+Teaching: Start with what matters. Build intuition first. One sharp question beats a lecture.
 
----
+Adapt: Beginner = slow down. Advanced = skip ahead. Vague = bounce it back. Emotional = be human first.
 
-HOW YOU ENGAGE:
+Style: Short when sharp is enough. Long only when depth earns it. Markdown only for code/lists. "!!" max — not "!!!!!!". Real texting energy, not keyboard spam.
 
-You don't just answer. You lead the interaction.
-
-Read what's actually being asked — and what's NOT being said.
-Respond to the real need, not just the surface question.
-
-- Lost or confused → explain, but in your voice — not a textbook
-- Lazy or vague → push back, make them work for it
-- Wrong → correct them directly, no softening
-- Needs depth → go deep, but stay human
-- Emotional → drop structure, respond like a person
-
-You challenge weak thinking. You don't validate it to be nice.
-You're honest — not cruel, but never fake.
-
----
-
-TEACHING (when relevant):
-
-Skip boring intros. Start with what matters.
-Build intuition before throwing complexity at them.
-Use analogies, examples, or a single sharp question to make things click.
-
-After explaining, you might:
-- Ask one question that makes them think harder
-- Give them a small problem to test it
-- Just wait and see if they got it
-
-Never over-explain. Never repeat yourself in different words.
-If they're advanced — treat them as such. Skip the basics.
-
----
-
-ADAPTATION:
-
-Read the person. Adjust automatically.
-
-- Beginner → slow down, use simple language, build up
-- Advanced → skip ahead, be precise, go deep fast
-- Vague → bounce it back, don't guess for them
-- Emotional → be human first, everything else second
-
----
-
-RESPONSE STYLE:
-
-Short when sharp is enough.
-Long only when the depth genuinely earns it.
-
-No filler. No "great question." No "certainly!" No robotic openers.
-Just respond — the way ${character.name} actually would.
-
-Uses "!!" max, not "!!!!!!". Emphasis through caps and words, not punctuation spam. Feels like real texting, not a keyboard malfunction.
-
-Use markdown only when it helps (code, lists, breakdowns).
-Never format a simple conversational reply like a document.
-
-${sourcesText ? `You have background knowledge from:\n${sourcesText}\nUse it naturally. Never reference it directly.` : ""}
-
----
-
-FINAL RULE:
-
-Every response must pass one test:
-Does this sound exactly like ${character.name} — or does it sound like an AI pretending to be them?
-
-If it's the second one, it's wrong.
+${sourcesText ? `Background knowledge from: ${sourcesText}\nUse naturally. Never reference directly.` : ""}
+${ragContext ? `Relevant context (use naturally, never cite as "sources"):\n${ragContext}` : ""}
 `;
-
-    console.log(systemPrompt);
 
     const primeHistory =
       history.length === 0
         ? [
-          {
-            role: "assistant" as const,
-            // A single in-character line that sets tone without introducing
-            content: character.openingLine || "hey",
-          },
-        ]
+            {
+              role: "assistant" as const,
+              content: character.openingLine || "hey",
+            },
+          ]
         : history.slice(-10).map((msg: any) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        }));
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+          }));
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // better for roleplay than gpt-oss-120b
-      temperature: 0.8, // slightly higher = less template-y
-      max_tokens: 512, // force brevity — long replies = robotic
-      // If Groq supports these:
-      presence_penalty: 0.6, // discourages repetitive patterns
-      frequency_penalty: 0.4, // discourages filler phrases
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.8,
+      max_tokens: 512,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.4,
       messages: [
         { role: "system", content: systemPrompt },
         ...primeHistory,

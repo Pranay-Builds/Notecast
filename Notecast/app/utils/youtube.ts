@@ -20,8 +20,8 @@ export async function getVideoInfo(videoUrl: string) {
         }
         const data = await response.json();
         return { ...data, url: videoUrl };
-    } catch (error) {
-        console.error("Error fetching video info:", error);
-        throw error;
+    } catch (err) {
+        console.error("Error fetching video info:", err);
+        throw err;
     }
 }

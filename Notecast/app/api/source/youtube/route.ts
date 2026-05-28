@@ -1,23 +1,51 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { callExtract, getExtractApiUrl } from "@/lib/extractApi";
 import { NextRequest, NextResponse } from "next/server";
+
+async function attachToNotebook(
+  notebookId: string,
+  sourceId: string,
+  fileUrl: string,
+) {
+  return prisma.notebookSource.upsert({
+    where: {
+      notebookId_sourceId: { notebookId, sourceId },
+    },
+    create: {
+      notebookId,
+      sourceId,
+      fileUrl,
+    },
+    update: {
+      fileUrl,
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { session, error } = await requireAuth();
 
-    if (error) {
-      return NextResponse.json({ error }, { status: 401 });
-    }
+    if (error) return error;
 
     const userId = session.user?.id;
+
+    try {
+      getExtractApiUrl();
+    } catch {
+      return NextResponse.json(
+        { error: "Extraction service is not configured" },
+        { status: 503 },
+      );
+    }
 
     const { url, notebookId, title, thumbnail } = await req.json();
 
     if (!url || !notebookId) {
       return NextResponse.json(
         { error: "URL and notebookId are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -31,152 +59,109 @@ export async function POST(req: NextRequest) {
     if (!notebook) {
       return NextResponse.json(
         { error: "Notebook not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const sourceKey = `youtube:${url}`;
 
-    // CHECK GLOBAL CACHE
     const cached = await prisma.extractedSource.findUnique({
-      where: {
-        sourceKey,
-      },
+      where: { sourceKey },
     });
 
-    // IF SOURCE ALREADY EXISTS
     if (cached) {
-
-      // CHECK IF ALREADY ATTACHED TO NOTEBOOK
-      const existingNotebookSource =
-        await prisma.notebookSource.findUnique({
-          where: {
-            notebookId_sourceId: {
-              notebookId,
-              sourceId: cached.id,
-            },
-          },
-        });
-
-      if (existingNotebookSource) {
+      if (cached.status === "failed") {
         return NextResponse.json(
-          { error: "Source already added" },
-          { status: 400 }
+          { error: "Source extraction previously failed" },
+          { status: 400 },
         );
       }
 
-      // ATTACH TO NOTEBOOK
-      await prisma.notebookSource.create({
-        data: {
-          notebookId,
-          sourceId: cached.id,
-          fileUrl: url,
-        },
-      });
+      await attachToNotebook(notebookId, cached.id, url);
 
       return NextResponse.json(
         {
           cached: true,
           source: cached,
         },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
-    // CREATE PROCESSING SOURCE
-    const extractedSource = await prisma.extractedSource.create({
-      data: {
+    const extractedSource = await prisma.extractedSource.upsert({
+      where: { sourceKey },
+      create: {
         sourceKey,
         type: "youtube",
         title: title || url,
         thumbnail,
         status: "processing",
       },
+      update: {
+        status: "processing",
+        title: title || url,
+        thumbnail,
+      },
     });
 
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 180000);
-
     try {
-      const res = await fetch(
-        `${process.env.EXTRACT_API_URL}/extract`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: "youtube",
-            url,
-          }),
-          signal: controller.signal,
-        }
-      );
+      const data = await callExtract({ type: "youtube", url }, 180_000);
 
-      if (!res.ok) {
-        throw new Error("Extraction failed");
-      }
-
-      const data = await res.json();
-
-      // UPDATE SOURCE CONTENT
       await prisma.extractedSource.update({
-        where: {
-          id: extractedSource.id,
-        },
+        where: { id: extractedSource.id },
         data: {
           content: data.text,
           status: "completed",
         },
       });
 
-      // STORE CHUNKS + EMBEDDINGS
-      await prisma.sourceChunk.createMany({
-        data: data.chunks.map(
-          (
-            chunk: {
+      await prisma.sourceChunk.deleteMany({
+        where: { sourceId: extractedSource.id },
+      });
+
+      if (data.chunks?.length) {
+        await prisma.sourceChunk.createMany({
+          data: data.chunks.map(
+            (chunk: {
               content: string;
               embedding: number[];
               index: number;
-            }
-          ) => ({
-            content: chunk.content,
-            embedding: chunk.embedding,
-            chunkIndex: chunk.index,
-            sourceId: extractedSource.id,
-          })
-        ),
-      });
+            }) => ({
+              content: chunk.content,
+              embedding: chunk.embedding,
+              chunkIndex: chunk.index,
+              sourceId: extractedSource.id,
+            }),
+          ),
+        });
+      }
 
-      // ATTACH TO NOTEBOOK
-      await prisma.notebookSource.create({
-        data: {
-          notebookId,
-          sourceId: extractedSource.id,
-          fileUrl: url,
-        },
+      await attachToNotebook(notebookId, extractedSource.id, url);
+
+      const completed = await prisma.extractedSource.findUnique({
+        where: { id: extractedSource.id },
       });
 
       return NextResponse.json(
         {
-          source: extractedSource,
+          source: completed,
         },
-        { status: 201 }
+        { status: 201 },
       );
+    } catch (err) {
+      await prisma.extractedSource.update({
+        where: { id: extractedSource.id },
+        data: { status: "failed" },
+      });
 
-    } finally {
-      clearTimeout(timeout);
+      throw err;
     }
-
   } catch (err) {
     console.error("Error in source/youtube route:", err);
 
     return NextResponse.json(
       { error: "Failed to save YouTube source" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
