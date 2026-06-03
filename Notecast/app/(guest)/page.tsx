@@ -5,115 +5,85 @@ import { signIn } from "next-auth/react";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#0b0b0b] text-white overflow-hidden p-2">
+    <main className="min-h-screen bg-[#0b0b0b] text-white flex flex-col">
       {/* NAVBAR */}
-      <header className="relative z-10">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">studybuddy</h1>
+      <header className="flex-shrink-0">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <span className="text-base font-semibold tracking-tight">studybuddy</span>
 
           <button
-            onClick={() =>
-              signIn("google", {
-                callbackUrl: "/dashboard",
-              })
-            }
-            className="
-              bg-white
-              text-black
-              text-sm
-              font-medium
-              px-5
-              py-2.5
-              rounded-full
-              hover:bg-zinc-200
-              transition
-            "
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            className="flex items-center gap-2.5 border border-white/15 text-sm font-medium px-4 py-2 rounded-full hover:bg-white/5 transition-colors"
           >
-            Start learning
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
           </button>
         </div>
       </header>
 
       {/* HERO */}
-      <section className="relative">
-        <div className="max-w-7xl mx-auto px-6 pt-10 lg:pt-16">
-          <div className="grid lg:grid-cols-[0.85fr_1.15fr] items-center gap-14">
-            {/* LEFT */}
-            <div className="max-w-[520px]">
-              <h1
-                className="
-                  text-5xl
-                  sm:text-6xl
-                  lg:text-7xl
-                  font-semibold
-                  tracking-tight
-                  leading-[0.93]
-                "
-              >
-                Study with AI tutors that actually teach.
-              </h1>
+      <section className="flex-1 flex items-center">
+        <div className="max-w-6xl mx-auto px-6 w-full py-8 lg:py-0">
+          <div className="grid lg:grid-cols-[1fr_1.1fr] items-center gap-10 lg:gap-16">
 
-              <p
-                className="
-                  mt-6
-                  text-lg
-                  text-zinc-300
-                  leading-relaxed
-                  max-w-md
-                "
-              >
-                Upload PDFs, lectures, notes, and videos. Learn through
-                conversation and active recall
+            {/* LEFT */}
+            <div className="max-w-[500px]">
+              {/* Stolen from Duolingo: a tiny trust/context label above the headline */}
+              <p className="text-xs font-medium text-zinc-600 uppercase tracking-widest mb-5">
+                For students who actually want to understand
               </p>
 
-              <button
-                onClick={() =>
-                  signIn("google", {
-                    callbackUrl: "/dashboard",
-                  })
-                }
-                className="
-                  mt-10
-                  bg-white
-                  text-black
-                  px-6
-                  py-3
-                  rounded-full
-                  text-sm
-                  font-medium
-                  hover:bg-zinc-200
-                  transition
-                "
-              >
-                Sign in with Google
-              </button>
+              <h1 className="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.0] text-white">
+                Finally, studying that doesn’t feel like a chore
+              </h1>
+
+              <p className="mt-5 text-base text-zinc-400 leading-relaxed max-w-sm">
+                Turn PDFs, lectures, notes, and documents into AI tutors that actually know your material.
+              </p>
+
+              <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <button
+                  onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                  className="flex items-center gap-2.5 bg-white text-black text-sm font-medium px-5 py-2.5 rounded-full hover:bg-zinc-100 transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  Sign in with Google
+                </button>
+
+                {/* Stolen from WhatsApp Web: a secondary "no friction" reassurance line */}
+                <p className="text-xs text-zinc-600">Free to start · No card needed</p>
+              </div>
+
+              
             </div>
 
-            {/* RIGHT */}
+            {/* RIGHT — image, your original style preserved */}
             <div className="relative">
-              <div
-                className="
-                  relative
-                  rounded-[36px]
-                  overflow-hidden
-                  border
-                  border-white/10
-                "
-              >
-                <div className="relative aspect-[1.18/1]">
+              <div className="relative rounded-[28px] overflow-hidden border border-white/10">
+                <div className="relative aspect-[1.1/1]">
                   <Image
                     src="/desk.jpg"
-                    alt="Hero"
+                    alt="Student studying at night"
                     fill
                     priority
-                    className="object-cover scale-[1.02]"
+                    className="object-cover"
                   />
-
-                  {/* CINEMATIC OVERLAY */}
-                  <div className="absolute inset-0 bg-black/10" />
+                  {/* Stolen from X: a very subtle bottom vignette so image bleeds into dark page */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </section>
