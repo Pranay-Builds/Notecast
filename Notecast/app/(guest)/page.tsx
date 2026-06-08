@@ -9,7 +9,7 @@ export default function HomePage() {
       {/* NAVBAR */}
       <header className="flex-shrink-0">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-base font-semibold tracking-tight">studybuddy</span>
+          <span className="text-base font-semibold tracking-tight">curio</span>
 
           <button
             onClick={() => signIn("google", { callbackUrl: "/dashboard" })}

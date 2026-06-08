@@ -73,8 +73,15 @@ export default function NotebookPage() {
   const [isAddingText, setIsAddingText] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"sources" | "chat">("chat");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (window.innerWidth >= 768) {
+      setIsSidebarOpen(true);
+    }
+  }, []);
   const [characters, setCharacters] = useState<any[]>([]);
   const [showCharacterMenu, setShowCharacterMenu] = useState(false);
 
@@ -153,7 +160,8 @@ export default function NotebookPage() {
   };
 
   const sendMessage = async (msg: string) => {
-    if (isSendingMessageRef.current || !msg.trim() || !notebook?.character) return;
+    if (isSendingMessageRef.current || !msg.trim() || !notebook?.character)
+      return;
 
     isSendingMessageRef.current = true;
 
@@ -461,11 +469,15 @@ export default function NotebookPage() {
 
       const oembed = await oembedRes.json();
 
-      // Save to DB
       const res = await fetch("/api/source/youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, notebookId: id, title: oembed.title }),
+        body: JSON.stringify({
+          url,
+          notebookId: id,
+          title: oembed.title,
+          thumbnail: oembed.thumbnail_url,
+        }),
       });
 
       if (!res.ok) throw new Error("Failed to save YouTube source");
@@ -649,8 +661,10 @@ export default function NotebookPage() {
     <div className="flex flex-col flex-1 min-w-0">
       <div className="h-screen flex flex-col bg-[#121212] text-white">
         {/* HEADER */}
-        <header className="bg-[#181818] border-b border-zinc-800 h-14 flex items-center justify-between px-6">
-          <h1 className="font-semibold text-lg">{notebook.name}</h1>
+        <header className="bg-[#181818] border-b border-zinc-800 h-14 flex items-center justify-between px-3 md:px-6">
+          <h1 className="font-semibold text-sm md:text-lg truncate max-w-[120px] md:max-w-none">
+            {notebook.name}
+          </h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
@@ -668,26 +682,29 @@ export default function NotebookPage() {
                   </div>
                 )}
 
-                <div className="flex flex-col text-left">
-                  <span className="text-xs text-zinc-400">Chatting with</span>
+                <div className="flex flex-col text-left min-w-0">
+                  <span className="hidden md:flex flex-col text-left">
+                    Chatting with
+                  </span>
 
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm font-medium text-white truncate max-w-[120px] md:max-w-none">
                     {notebook?.character?.name || "No character"}
                   </span>
                 </div>
               </button>
 
               {showCharacterMenu && (
-                <div className="absolute top-16 left-0 w-72 bg-[#181818] border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute top-16 left-0 w-[90vw] max-w-72 bg-[#181818]">
                   <div className="p-2">
                     {characters.map((character) => (
                       <button
                         key={character.id}
                         onClick={() => switchCharacter(character)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left hover:bg-zinc-800 ${notebook?.character?.id === character.id
-                          ? "bg-zinc-800"
-                          : ""
-                          }`}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition text-left hover:bg-zinc-800 ${
+                          notebook?.character?.id === character.id
+                            ? "bg-zinc-800"
+                            : ""
+                        }`}
                       >
                         {character.avatarUrl ? (
                           <img
@@ -716,24 +733,52 @@ export default function NotebookPage() {
               )}
             </div>
 
-
             <button
               onClick={() => setIsSidebarOpen((prev) => !prev)}
-              className="px-3 py-2 text-sm rounded-lg border border-zinc-700 hover:bg-zinc-800 transition"
+              className="hidden px-3 py-2 text-sm rounded-lg border border-zinc-700 hover:bg-zinc-800 transition md:flex"
             >
               {isSidebarOpen ? "Hide Sources" : "Show Sources"}
             </button>
           </div>
         </header>
 
+        <div className="md:hidden flex border-b border-zinc-800 bg-[#181818]">
+          <button
+            onClick={() => setMobileTab("sources")}
+            className={`flex-1 py-3 text-sm font-medium transition ${
+              mobileTab === "sources"
+                ? "text-white border-b-2 border-white"
+                : "text-zinc-400"
+            }`}
+          >
+            Sources
+          </button>
+
+          <button
+            onClick={() => setMobileTab("chat")}
+            className={`flex-1 py-3 text-sm font-medium transition ${
+              mobileTab === "chat"
+                ? "text-white border-b-2 border-white"
+                : "text-zinc-400"
+            }`}
+          >
+            Chat
+          </button>
+        </div>
+
         {/* MAIN */}
         <div className="flex flex-1 overflow-hidden">
+          {isSidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-30 md:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
           {/* SIDEBAR */}
           <div
             onDragEnter={(e) => {
               e.preventDefault();
               setIsDragging(true);
-
             }}
             onDragOver={(e) => e.preventDefault()}
             onDragLeave={(e) => {
@@ -746,11 +791,15 @@ export default function NotebookPage() {
               handleFileUpload(e.dataTransfer.files);
             }}
             className={`
-    transition-all duration-300 ease-in-out
-    ${isSidebarOpen ? "w-96 opacity-100" : "w-0 opacity-0"}
-    border-r border-zinc-800
-    overflow-hidden
-  `}
+  ${mobileTab === "sources" ? "flex" : "hidden"}
+  ${isSidebarOpen ? "md:flex" : "md:hidden"}
+  flex-col
+  w-full
+  md:w-96
+  overflow-y-auto
+  transition duration-300
+  border-r border-zinc-800
+`}
           >
             {isDragging && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -887,12 +936,13 @@ export default function NotebookPage() {
                     </div>
                     <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ease-out ${upload.status === "error"
-                          ? "bg-red-500"
-                          : upload.status === "done"
-                            ? "bg-emerald-500"
-                            : "bg-violet-500"
-                          }`}
+                        className={`h-full rounded-full transition-all duration-300 ease-out ${
+                          upload.status === "error"
+                            ? "bg-red-500"
+                            : upload.status === "done"
+                              ? "bg-emerald-500"
+                              : "bg-violet-500"
+                        }`}
                         style={{ width: `${upload.progress}%` }}
                       />
                     </div>
@@ -978,7 +1028,7 @@ export default function NotebookPage() {
                     </div>
                     <button
                       onClick={() => deleteSource(source.id)}
-                      className="opacity-0 group-hover:opacity-100 transition shrink-0 ml-2 hover:text-red-400"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition shrink-0 ml-2 hover:text-red-400"
                     >
                       <X size={16} />
                     </button>
@@ -988,8 +1038,15 @@ export default function NotebookPage() {
           </div>
 
           {/* CHAT AREA */}
-          <div className="flex flex-col flex-1">
-            <div className="flex-1 p-4 overflow-y-auto">
+          <div
+            className={`
+    ${mobileTab === "chat" ? "flex" : "hidden"}
+    md:flex
+    flex-col
+    flex-1
+  `}
+          >
+            <div className="flex-1 p-2 md:p-4 overflow-y-auto">
               {messages.length === 0 && (
                 <div className="text-zinc-500 text-sm px-2">
                   {notebook.character
@@ -1021,18 +1078,20 @@ export default function NotebookPage() {
                     )}
                     <div
                       key={i}
-                      className={`flex gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${!isSameSender ? "mt-4" : "mt-2"
-                        }`}
+                      className={`flex gap-2 md:gap-4 px-2 py-0.5 rounded hover:bg-white/[0.03] group ${
+                        !isSameSender ? "mt-4" : "mt-2"
+                      }`}
                     >
                       {/* Avatar column — always 40px wide */}
-                      <div className="w-10 min-w-[40px] flex justify-center">
+                      <div className="w-8 h-8 md:w-10 md:h-10 min-w-[32px] md:min-w-[40px]">
                         {!isSameSender ? (
                           <img
                             src={
                               msg.role === "assistant"
-                                ? msg?.character?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${notebook?.character?.name}`
+                                ? msg?.character?.avatarUrl ||
+                                  `https://api.dicebear.com/7.x/initials/svg?seed=${notebook?.character?.name}`
                                 : session?.user?.image ||
-                                `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name}`
+                                  `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name || "User"}`
                             }
                             className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
                           />
@@ -1054,7 +1113,7 @@ export default function NotebookPage() {
                             <span className="text-[15px] font-medium text-white leading-tight">
                               {msg.role === "user"
                                 ? session?.user?.name || "You"
-                                : notebook?.character?.name || "AI"}
+                                : notebook?.character?.name || "Tutor"}
                             </span>
                             <span className="text-[11px] text-zinc-500">
                               {new Date(msg.createdAt).toLocaleTimeString([], {
@@ -1132,7 +1191,7 @@ export default function NotebookPage() {
                           }}
                           className="
     absolute bottom-1 right-1 z-10
-    opacity-0 group-hover:opacity-100
+    opacity-100 md:opacity-0 md:group-hover:opacity-100
     transition-all duration-150
     text-zinc-400 hover:text-white
     bg-zinc-800/80 backdrop-blur
@@ -1164,7 +1223,11 @@ export default function NotebookPage() {
 
             <ChatInput
               onSend={sendMessage}
-              placeholder={notebook.character ? `Message ${notebook.character.name}` : "Select a character to start chatting"}
+              placeholder={
+                notebook.character
+                  ? `Message ${notebook.character.name}`
+                  : "Select a character to start chatting"
+              }
             />
           </div>
         </div>

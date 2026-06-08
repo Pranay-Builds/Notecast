@@ -11,8 +11,8 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Studybuddy",
-  description: "Turn your notes into podcasts within minutes.",
+  title: "Curio",
+  description: "Turn PDFs, lectures, notes, and documents into AI tutors that actually know your material.",
 };
 
 export default function RootLayout({

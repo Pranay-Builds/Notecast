@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+
     const { url, notebookId, title, thumbnail } = await req.json();
+    
 
     if (!url || !notebookId) {
       return NextResponse.json(

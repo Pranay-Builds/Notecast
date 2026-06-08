@@ -27,10 +27,10 @@ export default function Dashboard() {
   const [editValue, setEditValue] = useState("");
   const [search, setSearch] = useState("");
 
-
-  const filteredNotebooks = notebooks.filter((notebook) =>
-    notebook.name.toLowerCase().includes(search.toLowerCase()) ||
-    notebook.description?.toLowerCase().includes(search.toLowerCase())
+  const filteredNotebooks = notebooks.filter(
+    (notebook) =>
+      notebook.name.toLowerCase().includes(search.toLowerCase()) ||
+      notebook.description?.toLowerCase().includes(search.toLowerCase()),
   );
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function Dashboard() {
     if (!id) {
       toast.error("No Notebook ID provided");
       return;
-    };
+    }
 
     if (!confirm("Are you sure you want to delete this notebook?")) return;
 
@@ -70,30 +70,28 @@ export default function Dashboard() {
     setNotebooks((prev) => prev.filter((n) => n.id !== id));
 
     toast.success("Notebook deleted successfully!");
-  }
+  };
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-6 text-white">
-
+    <div className="max-w-6xl mx-auto py-6 md:py-12 px-4 md:px-6 text-white">
       {/* Greeting */}
       <div className="mb-10">
-        <h1 className="text-3xl font-semibold">
+        <h1 className="text-2xl md:text-3xl font-semibold">
           {greeting}, {session?.user?.name?.split(" ")[0]} 👋
         </h1>
 
-        <p className="text-zinc-400 mt-2">
+        <p className="text-sm md:text-base text-zinc-400 mt-2">
           Continue learning with your notebooks
         </p>
       </div>
 
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 sm:justify-between sm:items-center mb-6">
         <h2 className="text-xl font-semibold">Your Notebooks</h2>
-
 
         <button
           onClick={() => setOpenModal(true)}
-          className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+          className="inline-flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded-lg hover:bg-gray-200 transition w-full sm:w-auto"
         >
           <Plus size={16} />
           New Notebook
@@ -118,7 +116,7 @@ export default function Dashboard() {
 
       {/* Empty state */}
       {!loading && notebooks.length === 0 && (
-        <div className="border border-zinc-800 bg-[#181818] rounded-xl p-12 text-center">
+        <div className="border border-zinc-800 bg-[#181818] rounded-xl p-6 md:p-12 text-center">
           <h3 className="text-lg font-semibold mb-2">No notebooks yet</h3>
           <p className="text-zinc-400 mb-4">
             Create your first notebook to start learning
@@ -136,10 +134,12 @@ export default function Dashboard() {
 
       {/* Notebook grid */}
       {!loading && notebooks.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
           {filteredNotebooks.map((notebook) => (
-            <div className="bg-[#181818] border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative" key={notebook.id}>
-
+            <div
+              className="bg-[#181818] border border-zinc-800 rounded-2xl p-4 md:p-5 hover:border-zinc-600 hover:bg-[#1f1f1f] transition relative"
+              key={notebook.id}
+            >
               <Link
                 href={`/notebook/${notebook.id}`}
                 onClick={(e) => {
@@ -155,7 +155,6 @@ export default function Dashboard() {
                     onBlur={() => setEditingId(null)}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
-
                         await fetch(`/api/notebook/${notebook.id}`, {
                           method: "PATCH",
                           headers: {
@@ -166,20 +165,24 @@ export default function Dashboard() {
 
                         setNotebooks((prev) =>
                           prev.map((n) =>
-                            n.id === notebook.id ? { ...n, name: editValue } : n
-                          )
+                            n.id === notebook.id
+                              ? { ...n, name: editValue }
+                              : n,
+                          ),
                         );
 
-                        toast.success("Notebook updated successfully!")
+                        toast.success("Notebook updated successfully!");
 
                         setEditingId(null);
                       }
                     }}
-                    className="bg-transparent border border-zinc-700 rounded px-2 py-1 text-white w-full"
+                    className="w-full bg-[#181818] border border-zinc-700 rounded-xl px-4 py-3"
                     autoFocus
                   />
                 ) : (
-                  <h3 className="text-lg font-semibold">{notebook.name}</h3>
+                  <h3 className="text-lg font-semibold truncate pr-8">
+                    {notebook.name}
+                  </h3>
                 )}
 
                 {notebook.description && (
@@ -189,7 +192,8 @@ export default function Dashboard() {
                 )}
 
                 <p className="text-sm mt-2 text-gray-400">
-                  Created {new Date(notebook.createdAt!).toLocaleDateString("en-US", {
+                  Created{" "}
+                  {new Date(notebook.createdAt!).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                   })}
@@ -207,10 +211,8 @@ export default function Dashboard() {
                 <MoreVertical size={16} />
               </button>
 
-
               {openMenu === notebook.id && (
-                <div className="absolute right-1 top-10 bg-[#222] border border-zinc-700 rounded-lg shadow-lg w-40 py-1 z-50">
-
+                <div className="absolute top-12 right-4 bg-[#222] border border-zinc-700 rounded-lg shadow-lg w-40 py-1 z-50">
                   <button
                     className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm"
                     onClick={(e) => {
@@ -233,19 +235,42 @@ export default function Dashboard() {
                     </div>
                   </button>
 
-                  <button className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm" onClick={() => deleteNotebook(notebook.id)}>
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-zinc-700 text-sm"
+                    onClick={() => deleteNotebook(notebook.id)}
+                  >
                     <div className="flex items-center gap-2">
                       <Trash size={18} />
                       Delete
                     </div>
                   </button>
-
                 </div>
               )}
             </div>
           ))}
         </div>
       )}
+
+      <button
+        onClick={() => setOpenModal(true)}
+        className="
+    fixed
+    bottom-6
+    right-6
+    md:hidden
+    h-14
+    w-14
+    rounded-full
+    bg-white
+    text-black
+    shadow-xl
+    flex
+    items-center
+    justify-center
+  "
+      >
+        <Plus size={22} />
+      </button>
 
       <CreateNotebookModal
         isOpen={openModal}
