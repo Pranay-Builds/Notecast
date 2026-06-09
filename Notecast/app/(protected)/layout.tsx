@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ReactNode } from "react";
+import { prisma } from "@/lib/prisma";
 import Sidebar from "../components/Sidebar";
 import MobileNavbar from "../components/MobileNavbar";
 
@@ -13,6 +14,16 @@ export default async function ProtectedLayout({
 
   if (!session) {
     redirect("/");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: session?.user?.id,
+    },
+  });
+
+  if (!user?.hasOnboarded) {
+    redirect("/onboarding");
   }
 
   return (

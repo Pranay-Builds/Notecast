@@ -9,7 +9,7 @@ import {
   Send,
   Plus,
   X,
-  Image,
+  Image as ImageIcon,
   FileText,
   Clipboard,
   Globe,
@@ -21,6 +21,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { useSession } from "next-auth/react";
@@ -1085,7 +1086,7 @@ export default function NotebookPage() {
                       {/* Avatar column — always 40px wide */}
                       <div className="w-8 h-8 md:w-10 md:h-10 min-w-[32px] md:min-w-[40px]">
                         {!isSameSender ? (
-                          <img
+                          <Image
                             src={
                               msg.role === "assistant"
                                 ? msg?.character?.avatarUrl ||
@@ -1093,6 +1094,9 @@ export default function NotebookPage() {
                                 : session?.user?.image ||
                                   `https://api.dicebear.com/7.x/initials/svg?seed=${session?.user?.name || "User"}`
                             }
+                            alt={msg.role === "assistant" ? notebook?.character?.name || "Tutor" : session?.user?.name || "You"}
+                            width={40}
+                            height={40}
                             className="w-10 h-10 min-w-[40px] rounded-full object-cover aspect-square mt-0.5"
                           />
                         ) : (
